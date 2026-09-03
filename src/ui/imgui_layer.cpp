@@ -78,7 +78,9 @@ void ui::ImGuiLayer::Init(core::Window const& window,
   ImGui::CreateContext();
   ImGuiIO& imgui_io = ImGui::GetIO();
 
-  imgui_io.Fonts->AddFontDefault();
+  ImFontConfig default_font_config;
+  default_font_config.SizePixels = 13.0F;
+  imgui_io.Fonts->AddFontDefault(&default_font_config);
 
   ImFontConfig icon_font_config;
   icon_font_config.MergeMode = true;
