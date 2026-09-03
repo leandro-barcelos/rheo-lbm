@@ -1,0 +1,10 @@
+{
+  "dependencies": [
+    "gdal",
+    "glfw3",
+    "glm",
+    "shader-slang",
+    "yaml-cpp",
+    "vulkan-validationlayers"
+  ]
+}

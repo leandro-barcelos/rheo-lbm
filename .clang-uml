@@ -1,0 +1,38 @@
+compilation_database_dir: build
+output_directory: docs/uml
+add_compile_flags:
+  - -resource-dir=/usr/lib/clang/22
+
+diagrams:
+  class_diagram:
+    type: class
+    glob:
+      - src/**/*.cpp
+    include:
+      namespaces:
+        - app
+        - core
+        - renderer
+        - simulation
+        - resources
+        - ui
+    exclude:
+      namespaces:
+        - std
+        - vk
+        - glm
+        - ImGui
+
+  package_diagram:
+    type: package
+    glob:
+      - src/**/*.cpp
+    include:
+      namespaces:
+        - app
+        - core
+        - renderer
+        - simulation
+        - resources
+        - ui
+
