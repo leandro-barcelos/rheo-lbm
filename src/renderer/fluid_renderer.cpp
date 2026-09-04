@@ -4,8 +4,8 @@
 
 #include <vulkan/vulkan_raii.hpp>
 
-#include "../core/pipeline.h"
-#include "../simulation/fluid_simulator.h"
+#include "rheo-lbm/src/core/pipeline.h"
+#include "rheo-lbm/src/simulation/fluid_simulator.h"
 #include "rheo-lbm/src/renderer/camera.h"
 #include "rheo-lbm/src/resources/buffer.h"
 #include "vulkan/vulkan.hpp"

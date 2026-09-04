@@ -34,14 +34,14 @@ class Event {
 };
 
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
-#define EVENT_TYPE(event_type_name)                           \
-  [[nodiscard]] static std::uint32_t GetStaticEventType() {   \
-    static const std::uint32_t kEventType =                   \
-        CalculateEventType(event_type_name);                  \
-    return kEventType;                                        \
-  }                                                           \
-  [[nodiscard]] std::uint32_t GetEventType() const override { \
-    return GetStaticEventType();                              \
+#define EVENT_TYPE(event_type_name)                                          \
+  [[nodiscard]] static std::uint32_t GetStaticEventType() {                  \
+    static const std::uint32_t kEventType =                                  \
+        CalculateEventType(event_type_name);                                 \
+    return kEventType;                                                       \
+  }                                                                          \
+  [[nodiscard]] std::uint32_t GetEventType() const override {                \
+    return GetStaticEventType();                                             \
   }
 
 inline std::ostream& operator<<(std::ostream& ostream, const Event& event) {

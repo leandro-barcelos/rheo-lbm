@@ -6,7 +6,7 @@
 #include <utility>
 #include <vector>
 
-#include "../simulation/fluid_simulator.h"  // IWYU pragma: keep
+#include "rheo-lbm/src/simulation/fluid_simulator.h"  // IWYU pragma: keep
 #include "immediate_submit.h"
 #include "memory.h"
 

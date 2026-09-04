@@ -10,11 +10,11 @@
 #include <vector>
 #include <vulkan/vulkan_raii.hpp>
 
-#include "../core/frame_sync.h"
-#include "../core/vulkan_device.h"
-#include "../resources/buffer.h"
-#include "../resources/descriptor.h"
-#include "../resources/elevation.h"
+#include "rheo-lbm/src/core/frame_sync.h"
+#include "rheo-lbm/src/core/vulkan_device.h"
+#include "rheo-lbm/src/resources/buffer.h"
+#include "rheo-lbm/src/resources/descriptor.h"
+#include "rheo-lbm/src/resources/elevation.h"
 
 namespace simulation {
 

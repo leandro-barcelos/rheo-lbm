@@ -7,8 +7,8 @@
 #include <vector>
 #include <vulkan/vulkan_raii.hpp>
 
-#include "../core/vulkan_device.h"
-#include "../core/vulkan_swap_chain.h"
+#include "rheo-lbm/src/core/vulkan_device.h"
+#include "rheo-lbm/src/core/vulkan_swap_chain.h"
 #include "rheo-lbm/src/renderer/camera.h"
 #include "rheo-lbm/src/resources/buffer.h"
 #include "rheo-lbm/src/resources/descriptor.h"

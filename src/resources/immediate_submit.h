@@ -3,8 +3,8 @@
 
 #include <vulkan/vulkan_raii.hpp>
 
-#include "../core/command_pool.h"
-#include "../core/vulkan_device.h"
+#include "rheo-lbm/src/core/command_pool.h"
+#include "rheo-lbm/src/core/vulkan_device.h"
 #include "buffer.h"
 #include "images.h"
 

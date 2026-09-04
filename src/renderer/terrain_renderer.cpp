@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <optional>
 
-#include "../core/pipeline.h"
+#include "rheo-lbm/src/core/pipeline.h"
 #include "rheo-lbm/src/core/command_pool.h"
 #include "rheo-lbm/src/core/vulkan_device.h"
 #include "rheo-lbm/src/resources/buffer.h"

@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <stdexcept>
 
-#include "../core/pipeline.h"
+#include "rheo-lbm/src/core/pipeline.h"
 #include "vulkan/vulkan.hpp"
 
 vk::VertexInputBindingDescription

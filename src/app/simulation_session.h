@@ -4,10 +4,10 @@
 #include <memory>
 #include <optional>
 
-#include "../core/command_pool.h"
-#include "../core/frame_sync.h"
-#include "../core/vulkan_device.h"
-#include "../simulation/fluid_simulator.h"
+#include "rheo-lbm/src/core/command_pool.h"
+#include "rheo-lbm/src/core/frame_sync.h"
+#include "rheo-lbm/src/core/vulkan_device.h"
+#include "rheo-lbm/src/simulation/fluid_simulator.h"
 
 namespace app {
 

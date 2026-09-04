@@ -4,10 +4,10 @@
 #include <cstdint>
 #include <vulkan/vulkan_raii.hpp>
 
-#include "../core/vulkan_context.h"
-#include "../core/vulkan_device.h"
-#include "../core/vulkan_swap_chain.h"
-#include "../core/window.h"
+#include "rheo-lbm/src/core/vulkan_context.h"
+#include "rheo-lbm/src/core/vulkan_device.h"
+#include "rheo-lbm/src/core/vulkan_swap_chain.h"
+#include "rheo-lbm/src/core/window.h"
 
 namespace ui {
 
@@ -37,6 +37,7 @@ class ImGuiLayer {
   vk::raii::DescriptorPool descriptor_pool_ = nullptr;
   uint32_t min_image_count_ = 0;
   bool initialized_ = false;
+  mutable bool ui_focused_{false};
 };
 
 }  // namespace ui

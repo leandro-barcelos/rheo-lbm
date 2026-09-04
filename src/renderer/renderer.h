@@ -8,18 +8,17 @@
 #include <vector>
 #include <vulkan/vulkan_raii.hpp>
 
-#include "../core/command_pool.h"
-#include "../core/frame_sync.h"
-#include "../core/vulkan_context.h"
-#include "../core/vulkan_device.h"
-#include "../core/vulkan_swap_chain.h"
-#include "../core/window.h"
-#include "../resources/elevation.h"
-#include "../resources/images.h"
-#include "../simulation/fluid_simulator.h"
-#include "../ui/imgui_layer.h"
+#include "rheo-lbm/src/core/command_pool.h"
+#include "rheo-lbm/src/core/frame_sync.h"
+#include "rheo-lbm/src/core/vulkan_context.h"
+#include "rheo-lbm/src/core/vulkan_device.h"
+#include "rheo-lbm/src/core/vulkan_swap_chain.h"
+#include "rheo-lbm/src/core/window.h"
+#include "rheo-lbm/src/resources/elevation.h"
+#include "rheo-lbm/src/resources/images.h"
+#include "rheo-lbm/src/simulation/fluid_simulator.h"
+#include "rheo-lbm/src/ui/imgui_layer.h"
 #include "fluid_renderer.h"
-#include "rheo-lbm/src/core/input_events.h"
 #include "rheo-lbm/src/renderer/camera.h"
 #include "terrain_renderer.h"
 
@@ -27,6 +26,8 @@ namespace renderer {
 
 class Renderer {
  public:
+  explicit Renderer(core::WindowSize initial_window_size);
+
   void Init(core::Window const& window, core::VulkanContext const& context,
             core::VulkanDevice const& vulkan_device,
             core::VulkanSwapChain const& vulkan_swap_chain,
@@ -41,8 +42,6 @@ class Renderer {
                    std::optional<uint64_t> simulation_signal_value);
   void OnSwapChainRecreated(core::VulkanSwapChain const& vulkan_swap_chain);
 
-  void ProcessInput(core::WindowSize const& window_size,
-                    core::InputState const& input_state);
   void InitTopViewCamera(
       std::shared_ptr<const std::vector<resources::Elevation>> const&
           elevation_samples);
@@ -73,7 +72,7 @@ class Renderer {
   TerrainRenderer terrain_renderer_;
   ui::ImGuiLayer imgui_layer_;
   std::unordered_map<uint32_t, resources::AllocatedImage> ui_textures_;
-  Camera camera_{glm::vec3(0.5F, 2.0F, 0.5F)};
+  Camera camera_;
   core::CommandPools const* command_pools_ = nullptr;
 
   void CreateGraphicsCommandBuffer(core::VulkanDevice const& vulkan_device,

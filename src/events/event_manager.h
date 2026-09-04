@@ -45,9 +45,8 @@ template <typename EventType>
 inline void Subscribe(const EventHandler<EventType>& callback,
                       EventId event_id = 0,
                       const bool unsubscribe_on_success = false) {
-  std::unique_ptr<IEventHandlerWrapper> handler =
-      std::make_unique<EventHandlerWrapper<EventType>>(callback,
-                                                       unsubscribe_on_success);
+  std::unique_ptr<IEventHandlerWrapper> handler = std::make_unique<
+      EventHandlerWrapper<EventType>>(callback, unsubscribe_on_success);
   event_manager.Subscribe(EventType::GetStaticEventType(), std::move(handler),
                           event_id);
 }

@@ -3,7 +3,7 @@
 
 #include <vulkan/vulkan_raii.hpp>
 
-#include "../core/vulkan_device.h"
+#include "rheo-lbm/src/core/vulkan_device.h"
 #include "vulkan/vulkan.hpp"
 
 namespace resources {
