@@ -1,0 +1,112 @@
+@startuml
+title Classes de aplicação, domínio e portas
+
+left to right direction
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+package application {
+  class ApplicationController {
+    + Submit(command)
+    + ProcessPendingCommands()
+    + Update(delta_ms)
+    + ViewState(): ApplicationViewState
+    + SceneState(): SceneState
+    + ShouldQuit(): bool
+  }
+
+  class ApplicationViewState <<read model>> {
+    + simulation: SimulationSettingsDraft
+    + terrain_path: string
+    + terrain_texture_path: string
+    + project_path: string
+    + validation_errors: vector<string>
+    + last_error: optional<string>
+    + can_play: bool
+    + simulation_running: bool
+  }
+
+  class SceneState <<read model>> {
+    + terrain: SharedTerrain
+    + terrain_texture: SharedImage
+    + fluid: optional<FluidRenderSnapshot>
+    + revision: uint64
+  }
+
+  interface ICommandSink
+}
+
+package domain {
+  class SimulationSettingsDraft {
+    + total_fluid_volume: optional<float>
+    + initial_particle_spacing: optional<float>
+    + dem_resolution: optional<float>
+    + voxel_max_particles: optional<uint32>
+    + viscosity: optional<float>
+    + rest_density: optional<float>
+    + gas_constant: optional<float>
+    + coefficient_of_restitution: optional<float>
+    + friction: optional<float>
+    + yield_stress: optional<float>
+  }
+
+  class SimulationConfig <<validated>>
+  class ProjectDocument
+  class TerrainData {
+    + samples: vector<Elevation>
+    + width: uint32
+    + height: uint32
+    + IsValid(): bool
+  }
+  class Elevation
+  class ImageData {
+    + width: uint32
+    + height: uint32
+    + rgba: vector<uint8>
+    + IsValid(): bool
+  }
+}
+
+package assets {
+  interface ITerrainLoader
+  interface IImageLoader
+  interface IProjectRepository
+  class TerrainLoader
+  class ImageLoader
+  class ProjectRepository
+}
+
+package simulation {
+  interface ISimulationSession
+  class FluidRenderSnapshot
+}
+
+ApplicationController ..|> ICommandSink
+ApplicationController *-- ApplicationViewState
+ApplicationController *-- SceneState
+ApplicationController --> ITerrainLoader
+ApplicationController --> IImageLoader
+ApplicationController --> IProjectRepository
+ApplicationController --> ISimulationSession
+
+ApplicationViewState *-- SimulationSettingsDraft
+SceneState o-- "0..1" TerrainData
+SceneState o-- "0..1" ImageData
+SceneState o-- "0..1" FluidRenderSnapshot
+
+SimulationConfig o-- "1" TerrainData
+ProjectDocument *-- SimulationSettingsDraft
+TerrainData *-- "0..*" Elevation
+
+TerrainLoader ..|> ITerrainLoader
+ImageLoader ..|> IImageLoader
+ProjectRepository ..|> IProjectRepository
+ITerrainLoader ..> TerrainData : produz
+IImageLoader ..> ImageData : produz
+IProjectRepository ..> ProjectDocument : carrega / salva
+ISimulationSession ..> SimulationConfig : recebe
+ISimulationSession ..> FluidRenderSnapshot : produz
+
+@enduml

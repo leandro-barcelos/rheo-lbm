@@ -8,13 +8,18 @@ diagrams:
     type: class
     glob:
       - src/**/*.cpp
+      - src/**/*.h
     include:
       namespaces:
-        - app
-        - core
+        - application
+        - assets
+        - domain
+        - events
+        - graphics
+        - platform
         - renderer
+        - rheo
         - simulation
-        - resources
         - ui
     exclude:
       namespaces:
@@ -22,17 +27,22 @@ diagrams:
         - vk
         - glm
         - ImGui
+        - YAML
 
   package_diagram:
     type: package
     glob:
       - src/**/*.cpp
+      - src/**/*.h
     include:
       namespaces:
-        - app
-        - core
+        - application
+        - assets
+        - domain
+        - events
+        - graphics
+        - platform
         - renderer
+        - rheo
         - simulation
-        - resources
         - ui
-

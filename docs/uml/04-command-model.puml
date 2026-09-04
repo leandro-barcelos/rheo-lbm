@@ -1,0 +1,55 @@
+@startuml
+title Modelo de comandos da aplicação
+
+left to right direction
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+class "ui::UserInterface" as UserInterface
+interface "application::ICommandSink" as ICommandSink {
+  + Submit(ApplicationCommand)
+}
+class "application::ApplicationController" as Controller {
+  + Submit(ApplicationCommand)
+  + ProcessPendingCommands()
+}
+class "application::ApplicationViewState" as ViewState <<immutable view>>
+class "application::ApplicationCommand" as Command <<std::variant>>
+
+package "Alternativas de ApplicationCommand" {
+  class UpdateSimulationDraft
+  class ImportTerrain
+  class SetTerrainTexture
+  class LoadProject
+  class SaveProject
+  class NewProject
+  class PlaySimulation
+  class PauseSimulation
+  class ResetSimulation
+  class RequestQuit
+}
+
+UserInterface --> ViewState : desenha
+UserInterface --> ICommandSink : Submit(command)
+Controller ..|> ICommandSink
+Controller o-- "0..* pendentes" Command
+
+Command ..> UpdateSimulationDraft : alternativa
+Command ..> ImportTerrain : alternativa
+Command ..> SetTerrainTexture : alternativa
+Command ..> LoadProject : alternativa
+Command ..> SaveProject : alternativa
+Command ..> NewProject : alternativa
+Command ..> PlaySimulation : alternativa
+Command ..> PauseSimulation : alternativa
+Command ..> ResetSimulation : alternativa
+Command ..> RequestQuit : alternativa
+
+note bottom of Controller
+  Comandos são processados em ordem.
+  Não passam pelo barramento de input.
+end note
+
+@enduml

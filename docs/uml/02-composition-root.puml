@@ -1,0 +1,78 @@
+@startuml
+title Composition root do executável
+
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+class "rheo::RheoLBMApp" as Root <<composition root>> {
+  + Run()
+  - Init()
+  - MainLoop()
+  - RouteInput(capture)
+}
+
+class "events::InputQueue" as InputQueue
+class "platform::Window" as Window
+class "graphics::GraphicsContext" as Context
+class "graphics::Device" as Device
+class "graphics::SwapChain" as SwapChain
+class "graphics::CommandPools" as CommandPools
+class "graphics::FrameSync" as FrameSync
+class "assets::TerrainLoader" as TerrainLoader
+class "assets::ImageLoader" as ImageLoader
+class "assets::ProjectRepository" as ProjectRepository
+class "simulation::SimulationSession" as SimulationSession
+class "application::ApplicationController" as ApplicationController
+class "renderer::Renderer" as Renderer
+class "ui::UserInterface" as UserInterface
+
+interface "assets::ITerrainLoader" as ITerrainLoader
+interface "assets::IImageLoader" as IImageLoader
+interface "assets::IProjectRepository" as IProjectRepository
+interface "simulation::ISimulationSession" as ISimulationSession
+interface "application::ICommandSink" as ICommandSink
+interface "renderer::IOverlayPass" as IOverlayPass
+
+Root *-- InputQueue
+Root *-- Window
+Root *-- Context
+Root *-- Device
+Root *-- SwapChain
+Root *-- CommandPools
+Root *-- FrameSync
+Root *-- TerrainLoader
+Root *-- ImageLoader
+Root *-- ProjectRepository
+Root *-- SimulationSession
+Root *-- ApplicationController
+Root *-- Renderer
+Root *-- UserInterface
+
+Window --> InputQueue : recebe referência
+SimulationSession --> Device
+SimulationSession --> CommandPools
+SimulationSession --> FrameSync
+
+TerrainLoader ..|> ITerrainLoader
+ImageLoader ..|> IImageLoader
+ProjectRepository ..|> IProjectRepository
+SimulationSession ..|> ISimulationSession
+ApplicationController ..|> ICommandSink
+UserInterface ..|> IOverlayPass
+
+ApplicationController --> ITerrainLoader
+ApplicationController --> IImageLoader
+ApplicationController --> IProjectRepository
+ApplicationController --> ISimulationSession
+Renderer --> IOverlayPass : usa por frame
+UserInterface --> ICommandSink : envia comandos
+
+note right of Root
+  O executável controla criação,
+  injeção, frame loop e shutdown.
+  Nenhum serviço é global.
+end note
+
+@enduml

@@ -1,0 +1,54 @@
+@startuml
+title Carregamento atômico de projeto
+
+skinparam backgroundColor transparent
+skinparam shadowing false
+autonumber
+
+actor User
+participant "ui::UserInterface" as UI
+participant "application::ApplicationController" as Application
+participant "assets::IProjectRepository" as Repository
+participant "domain validation" as Validation
+participant "assets::ITerrainLoader" as TerrainLoader
+participant "assets::IImageLoader" as ImageLoader
+participant "simulation::ISimulationSession" as Simulation
+
+User -> UI : escolhe projeto
+UI -> Application : Submit(LoadProject{path})
+UI --> User : frame continua
+Application -> Application : ProcessPendingCommands()
+
+group Preparação do candidato sem alterar o estado atual
+  Application -> Repository : Load(path)
+  Repository --> Application : expected<ProjectDocument, AssetError>
+  Application -> Validation : ValidateSimulationSettings(draft)
+  Validation --> Application : erros de validação
+  Application -> TerrainLoader : Load(terrain_path, resolution)
+  TerrainLoader --> Application : expected<SharedTerrain, AssetError>
+  opt textura configurada
+    Application -> ImageLoader : Load(texture_path)
+    ImageLoader --> Application : expected<SharedImage, AssetError>
+  end
+end
+
+alt qualquer etapa falhou
+  Application -> Application : SetError(error)
+  note right of Application
+    ApplicationViewState e SceneState
+    anteriores permanecem intactos.
+  end note
+else candidato completo e válido
+  Application -> Simulation : Clear()
+  Application -> Application : commit ApplicationViewState
+  Application -> Application : commit SceneState e incrementa revision
+  Application -> Simulation : ApplyConfig(validated_config)
+  note right of Application
+    A nova configuração torna-se visível
+    somente depois de todos os assets válidos.
+  end note
+end
+
+Application --> UI : novo ViewState no próximo frame
+
+@enduml

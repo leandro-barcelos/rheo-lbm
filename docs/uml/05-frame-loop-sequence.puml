@@ -1,0 +1,67 @@
+@startuml
+title Sequência de um frame
+
+skinparam backgroundColor transparent
+skinparam shadowing false
+autonumber
+
+actor User
+participant "rheo-lbm\nRheoLBMApp" as Root
+participant "platform::Window" as Window
+queue "events::InputQueue" as InputQueue
+participant "ui::UserInterface" as UI
+participant "application::ApplicationController" as Application
+participant "simulation::ISimulationSession" as Simulation
+participant "renderer::Renderer" as Renderer
+participant "graphics" as Graphics
+
+loop enquanto a aplicação estiver aberta
+  Root -> Window : PollEvents()
+  User -> Window : teclado / mouse / resize
+  Window -> InputQueue : Push(InputEvent)
+  Window -> UI : callbacks do backend de input
+
+  Root -> UI : BeginFrame()
+  Root -> Application : ViewState()
+  Application --> Root : ApplicationViewState const&
+  Root -> UI : Draw(view_state, command_sink)
+  opt ação do usuário
+    UI -> Application : Submit(ApplicationCommand)
+  end
+  Root -> UI : EndFrame()
+  Root -> UI : InputCapture()
+  UI --> Root : mouse / teclado capturados
+
+  Root -> InputQueue : Drain()
+  InputQueue --> Root : eventos em ordem
+  loop para cada InputEvent
+    alt resize
+      Root -> Renderer : RequestResize()
+    else input não capturado pela UI
+      Root -> Renderer : HandleInput(event)
+    else input capturado
+      note right of Root : evento não chega à câmera
+    end
+  end
+
+  Root -> Application : ProcessPendingCommands()
+  note right of Application
+    Assets e Simulation são chamados
+    apenas pelos casos de uso necessários.
+  end note
+
+  Root -> Application : Update(delta_ms)
+  Application -> Simulation : Update(delta_ms)
+  Simulation --> Application : optional<FluidRenderSnapshot>
+
+  Root -> Application : SceneState()
+  Application --> Root : SceneState const&
+  Root -> Renderer : RenderFrame(scene, overlay)
+  Renderer -> Graphics : AcquireNextImage()
+  Renderer -> Renderer : sincroniza revisão da cena
+  Renderer -> Renderer : desenha terreno e partículas
+  Renderer -> UI : IOverlayPass::Render(CommandList)
+  Renderer -> Graphics : submit / present
+end
+
+@enduml

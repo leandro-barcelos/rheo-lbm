@@ -1,0 +1,61 @@
+@startuml
+title Dependências entre módulos
+
+left to right direction
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam linetype ortho
+
+package "rheo-lbm\n<<composition root>>" as Root #E8EAF6
+package "ui" as UI #F3E5F5
+package "application" as Application #E3F2FD
+package "renderer" as Renderer #E8F5E9
+package "simulation" as Simulation #E8F5E9
+package "assets" as Assets #FFF3E0
+package "domain" as Domain #FFFDE7
+package "graphics" as Graphics #ECEFF1
+package "platform" as Platform #ECEFF1
+package "events" as Events #FFFDE7
+
+Root --> UI
+Root --> Application
+Root --> Renderer
+Root --> Simulation
+Root --> Assets
+Root --> Graphics
+Root --> Platform
+Root --> Events
+
+UI --> Application : estado / comandos
+UI ..> Renderer : implementa IOverlayPass
+UI --> Graphics
+UI --> Platform
+
+Application --> Domain
+Application --> Assets : portas
+Application --> Simulation : porta de sessão
+
+Assets --> Domain
+Simulation --> Domain
+Simulation --> Graphics
+
+Renderer --> Application : SceneState
+Renderer --> Simulation : FluidRenderSnapshot
+Renderer --> Graphics
+Renderer --> Platform
+Renderer --> Events
+
+Graphics --> Domain
+Graphics --> Platform
+Platform --> Events
+
+legend bottom
+  |= Módulo |= Implementação concreta privada |
+  | platform | GLFW |
+  | graphics | Vulkan |
+  | assets | GDAL e YAML |
+  | ui | ImGui |
+endlegend
+
+@enduml

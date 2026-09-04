@@ -1,0 +1,94 @@
+@startuml
+title Classes do pipeline gráfico
+
+left to right direction
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+package graphics {
+  class GraphicsContext
+  class Device
+  class SwapChain
+  class CommandPools
+  class FrameSync
+  class BufferAllocator <<factory>>
+  class ImageAllocator <<factory>>
+  class DescriptorAllocator
+  class PipelineBuilder <<factory>>
+  class AllocatedBuffer <<owned resource>>
+  class AllocatedImage <<owned resource>>
+  class GraphicsBufferView <<opaque view>>
+  class CommandList <<opaque view>>
+
+  Device --> GraphicsContext
+  SwapChain --> Device
+  CommandPools --> Device
+  FrameSync --> Device
+  BufferAllocator ..> Device
+  BufferAllocator ..> CommandPools
+  BufferAllocator ..> AllocatedBuffer : cria
+  ImageAllocator ..> Device
+  ImageAllocator ..> CommandPools
+  ImageAllocator ..> AllocatedImage : cria
+  DescriptorAllocator --> Device
+  PipelineBuilder --> Device
+}
+
+package simulation {
+  class SimulationSession
+  class "SimulationSession::Impl" as SimulationImpl <<private>>
+  class FluidSimulator <<private>>
+  class FluidRenderSnapshot <<public contract>>
+  class FluidParticle <<shader ABI>>
+
+  SimulationSession *-- SimulationImpl
+  SimulationImpl *-- "0..1" FluidSimulator
+  SimulationImpl --> FluidRenderSnapshot : produz
+  FluidSimulator *-- "1..*" AllocatedBuffer
+  FluidSimulator ..> FluidParticle
+  FluidRenderSnapshot o-- GraphicsBufferView
+}
+
+package renderer {
+  class Renderer
+  class "Renderer::Impl" as RendererImpl <<private>>
+  class Camera <<private>>
+  class FluidRenderer <<private>>
+  class TerrainRenderer <<private>>
+  interface IOverlayPass
+
+  Renderer *-- RendererImpl
+  RendererImpl *-- Camera
+  RendererImpl *-- FluidRenderer
+  RendererImpl *-- TerrainRenderer
+  RendererImpl --> SwapChain
+  RendererImpl --> FrameSync
+  RendererImpl --> IOverlayPass
+  FluidRenderer --> FluidRenderSnapshot : consome
+  FluidRenderer *-- AllocatedBuffer
+  TerrainRenderer *-- AllocatedBuffer
+  TerrainRenderer *-- AllocatedImage
+}
+
+package ui {
+  class UserInterface
+}
+
+package domain {
+  class TerrainData
+  class ImageData
+}
+
+UserInterface ..|> IOverlayPass
+IOverlayPass ..> CommandList
+TerrainRenderer --> TerrainData
+TerrainRenderer --> ImageData
+
+note bottom of FluidRenderSnapshot
+  O renderer recebe apenas buffer opaco,
+  quantidade de partículas e sinal de prontidão.
+end note
+
+@enduml
