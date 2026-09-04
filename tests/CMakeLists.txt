@@ -1,0 +1,11 @@
+add_executable(input_queue_test input_queue_test.cpp)
+target_link_libraries(input_queue_test PRIVATE rheo::events)
+add_test(NAME input_queue_test COMMAND input_queue_test)
+
+add_executable(application_controller_test application_controller_test.cpp)
+target_link_libraries(application_controller_test PRIVATE rheo::application)
+add_test(NAME application_controller_test COMMAND application_controller_test)
+
+add_executable(project_repository_test project_repository_test.cpp)
+target_link_libraries(project_repository_test PRIVATE rheo::assets)
+add_test(NAME project_repository_test COMMAND project_repository_test)

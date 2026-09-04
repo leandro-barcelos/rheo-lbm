@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 4.2)
 project(rheo-lbm)
 
+include(CTest)
+
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug CACHE STRING "" FORCE)
 endif()
@@ -14,11 +16,10 @@ find_package(Vulkan REQUIRED)
 find_package(yaml-cpp CONFIG REQUIRED)
 find_package(GDAL CONFIG REQUIRED)
 
-add_library(VulkanCppModule INTERFACE)
-add_library(Vulkan::cppm ALIAS VulkanCppModule)
-target_link_libraries(VulkanCppModule INTERFACE Vulkan::Vulkan)
+add_library(rheo_graphics_backend INTERFACE)
+target_link_libraries(rheo_graphics_backend INTERFACE Vulkan::Vulkan)
 target_compile_definitions(
-    VulkanCppModule
+    rheo_graphics_backend
     INTERFACE
         VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1
         VULKAN_HPP_NO_STRUCT_CONSTRUCTORS=1
@@ -56,80 +57,34 @@ target_link_libraries(imgui PUBLIC Vulkan::Vulkan glfw)
 
 target_compile_definitions(imgui PUBLIC VK_USE_PLATFORM_XLIB_KHR)
 
-set(IMGUI_DIR external/imgui)
-include_directories(${IMGUI_DIR} ${IMGUI_DIR}/backends ..)
+add_subdirectory(src/domain)
+add_subdirectory(src/events)
+add_subdirectory(src/platform)
+add_subdirectory(src/graphics)
+add_subdirectory(src/assets)
+add_subdirectory(src/simulation)
+add_subdirectory(src/application)
+add_subdirectory(src/renderer)
+add_subdirectory(src/ui)
 
-add_executable(${PROJECT_NAME})
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
 
-target_sources(
-    ${PROJECT_NAME}
-    PRIVATE
-        src/main.cpp
-        src/app/simulation_session.cpp
-        src/app/simulation_session.h
-        src/app/ui_controller.cpp
-        src/app/ui_controller.h
-        src/app/rheo_lbm_app.cpp
-        src/app/rheo_lbm_app.h
-        src/core/command_pool.cpp
-        src/core/command_pool.h
-        src/core/frame_sync.cpp
-        src/core/frame_sync.h
-        src/core/pipeline.cpp
-        src/core/pipeline.h
-        src/core/vulkan_context.cpp
-        src/core/vulkan_context.h
-        src/core/vulkan_device.cpp
-        src/core/vulkan_device.h
-        src/core/vulkan_swap_chain.cpp
-        src/core/vulkan_swap_chain.h
-        src/core/window.cpp
-        src/core/window.h
-        src/events/event.h
-        src/events/event_handler.h
-        src/events/event_manager.h
-        src/events/event_manager.cpp
-        src/renderer/camera.cpp
-        src/renderer/camera.h
-        src/renderer/fluid_renderer.cpp
-        src/renderer/fluid_renderer.h
-        src/renderer/terrain_renderer.cpp
-        src/renderer/terrain_renderer.h
-        src/renderer/renderer.cpp
-        src/renderer/renderer.h
-        src/resources/buffer.cpp
-        src/resources/buffer.h
-        src/resources/elevation.cpp
-        src/resources/elevation.h
-        src/resources/descriptor.cpp
-        src/resources/descriptor.h
-        src/resources/geotiff.cpp
-        src/resources/geotiff.h
-        src/resources/immediate_submit.cpp
-        src/resources/immediate_submit.h
-        src/resources/images.cpp
-        src/resources/images.h
-        src/resources/memory.cpp
-        src/resources/memory.h
-        src/simulation/fluid_simulator.cpp
-        src/simulation/fluid_simulator.h
-        src/ui/imgui_layer.cpp
-        src/ui/imgui_layer.h
-        src/ui/panels/parameters_panel.cpp
-        src/ui/panels/parameters_panel.h
-        src/ui/panels/control_panel.cpp
-        src/ui/panels/control_panel.h
-)
-
-target_include_directories(${PROJECT_NAME} PRIVATE external)
+add_executable(${PROJECT_NAME} src/main.cpp src/rheo_lbm_app.cpp)
+target_include_directories(${PROJECT_NAME} PRIVATE src)
 target_link_libraries(
     ${PROJECT_NAME}
-    PRIVATE glfw Vulkan::cppm glm::glm imgui yaml-cpp::yaml-cpp GDAL::GDAL
+    PRIVATE
+        rheo::application
+        rheo::assets
+        rheo::events
+        rheo::graphics
+        rheo::platform
+        rheo::renderer
+        rheo::simulation
+        rheo::ui
 )
-
-if(UNIX AND NOT APPLE)
-    target_link_libraries(${PROJECT_NAME} PRIVATE dl)
-endif()
 
 find_program(SLANGC_EXECUTABLE slangc HINTS $ENV{VULKAN_SDK}/bin REQUIRED)
 

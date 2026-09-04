@@ -1,0 +1,7 @@
+add_library(rheo_platform STATIC src/window.cpp)
+add_library(rheo::platform ALIAS rheo_platform)
+target_include_directories(rheo_platform PUBLIC include)
+target_link_libraries(rheo_platform PUBLIC rheo::events PRIVATE glfw)
+if(UNIX AND NOT APPLE)
+    target_link_libraries(rheo_platform PRIVATE dl)
+endif()

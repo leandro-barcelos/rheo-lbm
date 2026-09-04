@@ -1,9 +1,9 @@
 #include <cstdlib>
 
-#include "app/rheo_lbm_app.h"
+#include "rheo_lbm_app.h"
 
 int main() {
-  app::RheoLBMApp app;
+  rheo::RheoLBMApp app;
   app.Run();
   return EXIT_SUCCESS;
 }
