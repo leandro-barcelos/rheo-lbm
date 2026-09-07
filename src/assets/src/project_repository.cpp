@@ -57,6 +57,14 @@ assets::ProjectRepository::Load(std::string const& path) const {
         ReadOptional<float>(parameters, "coefficient_of_restitution");
     draft.friction = ReadOptional<float>(parameters, "friction");
     draft.yield_stress = ReadOptional<float>(parameters, "yield_stress");
+    draft.lattice.height_subdivisions =
+        ReadOptional<std::int32_t>(parameters, "height_subdivisions")
+            .value_or(13);
+    draft.lattice.upper_elevation_margin =
+        ReadOptional<float>(parameters, "upper_elevation_margin")
+            .value_or(0.0F);
+    if (auto valid = domain::ValidateLatticeSettings(draft.lattice); !valid)
+      return std::unexpected(AssetError{valid.error()});
     document.terrain_path =
         root["elevation_texture_path"]
             ? root["elevation_texture_path"].as<std::string>()
@@ -97,6 +105,8 @@ std::expected<void, assets::AssetError> assets::ProjectRepository::Save(
     WriteOptional(parameters, "friction", draft.friction);
     WriteOptional(parameters, "yield_stress", draft.yield_stress);
     WriteOptional(parameters, "dem_resolution", draft.dem_resolution);
+    parameters["height_subdivisions"] = draft.lattice.height_subdivisions;
+    parameters["upper_elevation_margin"] = draft.lattice.upper_elevation_margin;
     root["parameters"] = parameters;
 
     std::ofstream output(path, std::ios::out | std::ios::trunc);

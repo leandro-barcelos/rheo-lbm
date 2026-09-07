@@ -33,6 +33,7 @@ struct QueueFamilyIndices {
 
 class Device {
  public:
+  // A null surface initializes graphics/compute queues without presentation.
   void Init(GraphicsContext const& context, vk::SurfaceKHR surface);
 
   [[nodiscard]] vk::raii::PhysicalDevice const& PhysicalDevice() const {

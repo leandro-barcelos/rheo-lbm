@@ -1,40 +1,11 @@
-#ifndef RHEOLBM_GEOTIFF_H
-#define RHEOLBM_GEOTIFF_H
-
-#include <gdal.h>
-#include <gdal_dataset.h>
-
-#include <array>
+#ifndef RHEO_ASSETS_GEOTIFF_H
+#define RHEO_ASSETS_GEOTIFF_H
 #include <string>
-#include <vector>
 
-#include "rheo/domain/elevation.h"
-
+#include "rheo/domain/dem_data.h"
 namespace assets {
-
-class GeoTiff {
- public:
-  GeoTiff(const GeoTiff&) = delete;
-  GeoTiff(GeoTiff&&) = delete;
-  GeoTiff& operator=(const GeoTiff&) = delete;
-  GeoTiff& operator=(GeoTiff&&) = delete;
-  explicit GeoTiff(std::string filename);
-  ~GeoTiff();
-
-  [[nodiscard]] std::array<int, 3> const& Dimensions() const {
-    return dimensions_;
-  }
-  [[nodiscard]] std::vector<domain::Elevation> Elevations(
-      int layer = 1, float resolution_meters = 10.0F);
-
- private:
-  std::string filename_;
-  GDALDataset* geotiff_dataset_ = nullptr;
-  std::array<int, 3> dimensions_{0};
-  std::array<double, 6> geo_transform_{0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
-  bool has_geo_transform_ = false;
-};
-
+// Throws on unsupported metadata or unreadable data; DemLoader translates
+// errors.
+[[nodiscard]] domain::DemData ReadGeoTiff(std::string const& path);
 }  // namespace assets
-
-#endif  // !RHEOLBM_GEOTIFF_H
+#endif

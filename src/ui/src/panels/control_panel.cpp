@@ -26,7 +26,7 @@ ui::ControlPanel::Events ui::ControlPanel::Draw(bool simulation_running,
       if (can_play) {
         ImGui::SetTooltip("Play");
       } else {
-        ImGui::SetTooltip("Define all parameters and upload a texture first");
+        ImGui::SetTooltip("Fluid dynamics is not available yet");
       }
     }
 
@@ -41,15 +41,17 @@ ui::ControlPanel::Events ui::ControlPanel::Draw(bool simulation_running,
     }
 
     ImGui::SameLine();
+    ImGui::BeginDisabled(!can_edit_dam);
     if (ImGui::Button(ICON_FA_ROTATE_RIGHT)) {
       events.reset_pressed = true;
     }
+    ImGui::EndDisabled();
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
-      ImGui::SetTooltip("Reset");
+      ImGui::SetTooltip("Restore terrain");
     }
   }
 
-  DrawDamControls(simulation_running, can_edit_dam, events);
+
 
   ImGui::End();
 

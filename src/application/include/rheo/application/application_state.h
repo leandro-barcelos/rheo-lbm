@@ -6,10 +6,10 @@
 #include <string>
 #include <vector>
 
+#include "rheo/domain/dem_data.h"
 #include "rheo/domain/image_data.h"
 #include "rheo/domain/simulation_config.h"
-#include "rheo/domain/terrain_data.h"
-#include "rheo/simulation/fluid_types.h"
+#include "rheo/simulation/simulation_types.h"
 
 namespace application {
 
@@ -23,14 +23,14 @@ struct ApplicationViewState {
   bool can_play = false;
   bool simulation_running = false;
   bool terrain_loaded = false;
-};
+} __attribute__((packed));
 
 struct SceneState {
-  domain::SharedTerrain terrain;
+  domain::SharedDem dem;
   domain::SharedImage terrain_texture;
-  std::optional<simulation::FluidRenderSnapshot> fluid;
+  std::optional<simulation::LatticeRenderSnapshot> lattice;
   std::uint64_t revision = 0;
-};
+} __attribute__((aligned(128)));
 
 }  // namespace application
 

@@ -16,6 +16,8 @@ namespace renderer {
 
 class Renderer {
  public:
+  Renderer(Renderer&&) = delete;
+  Renderer& operator=(Renderer&&) = delete;
   explicit Renderer(platform::WindowSize initial_window_size);
   ~Renderer();
 

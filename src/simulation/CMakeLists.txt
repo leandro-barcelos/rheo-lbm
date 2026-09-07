@@ -1,6 +1,6 @@
 add_library(
     rheo_simulation STATIC
-    src/fluid_simulator.cpp
+    src/lattice_initializer.cpp
     src/simulation_session.cpp
 )
 add_library(rheo::simulation ALIAS rheo_simulation)

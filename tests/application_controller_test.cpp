@@ -1,233 +1,133 @@
 #include "rheo/application/application_controller.h"
 
-#include <expected>
-#include <memory>
-#include <optional>
 #include <stdexcept>
 #include <string>
-#include <utility>
-
-namespace {
-
-void Check(bool condition) {
-  if (!condition) {
-    throw std::runtime_error("test check failed");
-  }
+using namespace application;
+void Check(bool value) {
+  if (!value) throw std::runtime_error("controller check failed");
 }
-
-domain::SimulationSettingsDraft CompleteDraft() {
-  return {
-      .total_fluid_volume = 1000.0F,
-      .initial_particle_spacing = 0.1F,
-      .dem_resolution = 10.0F,
-      .voxel_max_particles = 16,
-      .viscosity = 5.0F,
-      .rest_density = 1000.0F,
-      .gas_constant = 10.0F,
-      .coefficient_of_restitution = 0.5F,
-      .friction = 0.01F,
-      .yield_stress = 2.0F,
-  };
-}
-
-domain::SharedTerrain Terrain(float elevation) {
-  return std::make_shared<const domain::TerrainData>(domain::TerrainData{
-      .samples = {{.uv = {0.0F, 0.0F},
-                   .elevation = elevation,
-                   .position = {0.0F, elevation, 0.0F}}},
-      .width = 1,
-      .height = 1,
-  });
-}
-
-class FakeTerrainLoader final : public assets::ITerrainLoader {
+class FakeDemLoader final : public assets::IDemLoader {
  public:
-  std::expected<domain::SharedTerrain, assets::AssetError> Load(
-      std::string const& path, float) const override {
-    if (path == failing_path) {
-      return std::unexpected(assets::AssetError{"terrain failure"});
-    }
-    return terrain;
+  domain::SharedDem dem = std::make_shared<domain::DemData>(
+      domain::DemData{.samples = {{.coordinate = {0, 0}, .elevation = 1}},
+                      .width = 1,
+                      .height = 1,
+                      .pixel_size_meters = {10, 10},
+                      .min_elevation = 1,
+                      .max_elevation = 1});
+  std::expected<domain::SharedDem, assets::AssetError> Load(
+      std::string const& path) const override {
+    if (path == "bad")
+      return std::unexpected(assets::AssetError{"read failed"});
+    return dem;
   }
-
-  domain::SharedTerrain terrain = Terrain(1.0F);
-  std::string failing_path;
 };
-
 class FakeImageLoader final : public assets::IImageLoader {
  public:
   std::expected<domain::SharedImage, assets::AssetError> Load(
-      std::string const& path) const override {
-    if (path == failing_path) {
-      return std::unexpected(assets::AssetError{"image failure"});
-    }
+      std::string const&) const override {
     return std::make_shared<const domain::ImageData>(
         domain::ImageData{.width = 1, .height = 1, .rgba = {1, 2, 3, 4}});
   }
-
-  std::string failing_path;
 };
-
-class FakeProjectRepository final : public assets::IProjectRepository {
+class FakeRepository final : public assets::IProjectRepository {
  public:
+  mutable domain::ProjectDocument document;
   std::expected<domain::ProjectDocument, assets::AssetError> Load(
-      std::string const& path) const override {
-    loaded_path = path;
-    if (load_error) {
-      return std::unexpected(assets::AssetError{"project failure"});
-    }
+      std::string const&) const override {
     return document;
   }
-
   std::expected<void, assets::AssetError> Save(
-      std::string const& path,
-      domain::ProjectDocument const& value) const override {
-    saved_path = path;
-    saved_document = value;
+      std::string const&, domain::ProjectDocument const& value) const override {
+    document = value;
     return {};
   }
-
-  domain::ProjectDocument document;
-  bool load_error = false;
-  mutable std::string saved_path;
-  mutable std::string loaded_path;
-  mutable std::optional<domain::ProjectDocument> saved_document;
 };
-
-class FakeSimulation final : public simulation::ISimulationSession {
+class FakeSession final : public simulation::ISimulationSession {
  public:
-  void ApplyConfig(domain::SimulationConfig config) override {
-    last_config = std::move(config);
-    ++apply_count;
+  int initializations = 0, clears = 0;
+  bool fail = false;
+  std::optional<simulation::LatticeRenderSnapshot> snapshot;
+  std::expected<void, std::string> InitializeTerrain(
+      domain::SharedDem, domain::LatticeSettings) override {
+    ++initializations;
+    if (fail) return std::unexpected("GPU failure");
+    snapshot = simulation::LatticeRenderSnapshot{
+        .cell_count = 13,
+        .ready_signal = static_cast<std::uint64_t>(initializations)};
+    return {};
   }
-  void Play() override {
-    running = last_config.has_value();
-    ++play_count;
-  }
-  void Pause() override {
-    running = false;
-    ++pause_count;
-  }
-  void Reset() override {
-    running = false;
-    ++reset_count;
-  }
+  void Play() override { throw std::runtime_error("SPH must remain disabled"); }
+  void Pause() override {}
   void Clear() override {
-    running = false;
-    last_config.reset();
-    ++clear_count;
+    ++clears;
+    snapshot.reset();
   }
-  std::optional<simulation::FluidRenderSnapshot> Update(double) override {
+  std::optional<simulation::LatticeRenderSnapshot> Update(double) override {
     return snapshot;
   }
-  bool IsRunning() const override { return running; }
-  bool IsReady() const override { return last_config.has_value(); }
-
-  std::optional<domain::SimulationConfig> last_config;
-  std::optional<simulation::FluidRenderSnapshot> snapshot;
-  int apply_count = 0;
-  int play_count = 0;
-  int pause_count = 0;
-  int reset_count = 0;
-  int clear_count = 0;
-  bool running = false;
+  bool IsRunning() const override { return false; }
+  bool IsReady() const override { return snapshot.has_value(); }
 };
-
-}  // namespace
-
 int main() {
-  FakeTerrainLoader terrain_loader;
-  FakeImageLoader image_loader;
-  FakeProjectRepository repository;
-  FakeSimulation simulation;
-  application::ApplicationController controller(terrain_loader, image_loader,
-                                                repository, simulation);
-
-  controller.Submit(application::PlaySimulation{});
-  controller.ProcessPendingCommands();
-  Check(simulation.play_count == 0);
-  Check(controller.ViewState().last_error.has_value());
-
-  auto invalid_draft = CompleteDraft();
-  invalid_draft.coefficient_of_restitution = 0.0F;
-  controller.Submit(application::UpdateSimulationDraft{invalid_draft});
-  controller.Submit(application::ImportTerrain{"first.tif"});
-  controller.ProcessPendingCommands();
-  Check(!controller.ViewState().can_play);
-  Check(!controller.ViewState().validation_errors.empty());
-
-  controller.Submit(application::UpdateSimulationDraft{CompleteDraft()});
-  controller.ProcessPendingCommands();
-  Check(controller.ViewState().can_play);
-  Check(controller.ViewState().terrain_path == "first.tif");
-  Check(controller.SceneState().terrain == terrain_loader.terrain);
-  Check(simulation.apply_count == 1);
-
-  controller.Submit(application::SetTerrainTexture{"first.png"});
-  controller.ProcessPendingCommands();
-  auto const first_texture = controller.SceneState().terrain_texture;
-  Check(first_texture != nullptr);
-  image_loader.failing_path = "broken.png";
-  controller.Submit(application::SetTerrainTexture{"broken.png"});
-  controller.ProcessPendingCommands();
-  Check(controller.SceneState().terrain_texture == first_texture);
-  Check(controller.ViewState().terrain_texture_path == "first.png");
-
-  controller.Submit(application::PlaySimulation{});
-  controller.Submit(application::PauseSimulation{});
-  controller.Submit(application::ResetSimulation{});
-  controller.ProcessPendingCommands();
-  Check(simulation.play_count == 1);
-  Check(simulation.pause_count == 1);
-  Check(simulation.reset_count == 1);
-
-  repository.document = {
-      .simulation = CompleteDraft(),
-      .terrain_path = "broken.tif",
-      .terrain_texture_path = "new.png",
+  FakeDemLoader loader;
+  FakeImageLoader images;
+  FakeRepository repository;
+  FakeSession session;
+  ApplicationController app(loader, images, repository, session);
+  auto submit = [&](ApplicationCommand command) {
+    app.Submit(std::move(command));
+    app.ProcessPendingCommands();
   };
-  terrain_loader.failing_path = "broken.tif";
-  auto const previous_terrain = controller.SceneState().terrain;
-  auto const previous_revision = controller.SceneState().revision;
-  controller.Submit(application::LoadProject{"broken.yaml"});
-  controller.ProcessPendingCommands();
-  Check(controller.ViewState().terrain_path == "first.tif");
-  Check(controller.SceneState().terrain == previous_terrain);
-  Check(controller.SceneState().revision == previous_revision);
-  Check(controller.ViewState().last_error == "terrain failure");
-
-  controller.Submit(application::SaveProject{"saved-project"});
-  controller.ProcessPendingCommands();
-  Check(repository.saved_path == "saved-project.yaml");
-  Check(repository.saved_document.has_value());
-  Check(repository.saved_document->terrain_path == "first.tif");
-
-  terrain_loader.failing_path.clear();
-  image_loader.failing_path.clear();
-  repository.document = {
-      .simulation = CompleteDraft(),
-      .terrain_path = "loaded.tif",
-      .terrain_texture_path = "loaded.png",
-  };
-  auto const revision_before_load = controller.SceneState().revision;
-  controller.Submit(application::LoadProject{"loaded"});
-  controller.ProcessPendingCommands();
-  Check(repository.loaded_path == "loaded.yaml");
-  Check(controller.ViewState().project_path == "loaded.yaml");
-  Check(controller.ViewState().terrain_path == "loaded.tif");
-  Check(controller.ViewState().terrain_texture_path == "loaded.png");
-  Check(controller.ViewState().can_play);
-  Check(!controller.ViewState().last_error.has_value());
-  Check(controller.SceneState().revision == revision_before_load + 1);
-
-  auto const populated_revision = controller.SceneState().revision;
-  controller.Submit(application::NewProject{});
-  controller.ProcessPendingCommands();
-  Check(controller.SceneState().terrain == nullptr);
-  Check(controller.SceneState().terrain_texture == nullptr);
-  Check(controller.SceneState().revision == populated_revision + 1);
-
-  controller.Submit(application::RequestQuit{});
-  controller.ProcessPendingCommands();
-  Check(controller.ShouldQuit());
+  submit(ImportTerrain{"dem.tif"});
+  Check(app.ViewState().terrain_loaded && !app.ViewState().can_play);
+  Check(app.SceneState().dem == loader.dem &&
+        app.SceneState().lattice.has_value());
+  Check(session.initializations == 1 && !app.ViewState().last_error);
+  for (int i = 0; i < 10; ++i) app.Update(16);
+  Check(session.initializations == 1);
+  auto draft = app.ViewState().simulation;
+  draft.viscosity = 5;
+  submit(UpdateSimulationDraft{draft});
+  Check(session.initializations == 1 && app.SceneState().lattice.has_value());
+  draft.lattice.height_subdivisions = 26;
+  submit(UpdateSimulationDraft{draft});
+  Check(session.initializations == 2 &&
+        app.ViewState().simulation.lattice.height_subdivisions == 26);
+  auto revision = app.SceneState().revision;
+  draft.lattice.height_subdivisions = 0;
+  submit(UpdateSimulationDraft{draft});
+  Check(session.initializations == 2 && app.SceneState().revision == revision &&
+        app.ViewState().last_error.has_value());
+  session.fail = true;
+  draft.lattice.height_subdivisions = 30;
+  submit(UpdateSimulationDraft{draft});
+  Check(app.ViewState().simulation.lattice.height_subdivisions == 26 &&
+        app.SceneState().revision == revision);
+  submit(ImportTerrain{"other.tif"});
+  Check(app.ViewState().terrain_path == "dem.tif" &&
+        app.SceneState().revision == revision);
+  submit(ImportTerrain{"bad"});
+  Check(app.SceneState().dem == loader.dem);
+  repository.document.terrain_path = "project.tif";
+  submit(LoadProject{"project"});
+  Check(app.ViewState().terrain_path == "dem.tif");
+  session.fail = false;
+  submit(LoadProject{"project"});
+  Check(app.ViewState().terrain_path == "project.tif" &&
+        app.SceneState().lattice.has_value());
+  Check(!app.ViewState().last_error &&
+        !app.ViewState().simulation.total_fluid_volume);
+  int before = session.initializations;
+  submit(ResetSimulation{});
+  Check(session.initializations == before + 1 &&
+        app.SceneState().lattice.has_value());
+  submit(PlaySimulation{});
+  Check(!app.ViewState().simulation_running);
+  submit(SaveProject{"saved"});
+  Check(repository.document.terrain_path == "project.tif");
+  submit(NewProject{});
+  Check(!app.SceneState().dem && !app.SceneState().lattice &&
+        session.clears == 1);
+  Check(app.ViewState().simulation.lattice.height_subdivisions == 13);
 }

@@ -8,7 +8,7 @@
 rheo::RheoLBMApp::RheoLBMApp()
     : window_(kWindowProperties, input_queue_),
       simulation_(device_, command_pools_, frame_sync_),
-      application_(terrain_loader_, image_loader_, project_repository_,
+      application_(dem_loader_, image_loader_, project_repository_,
                    simulation_),
       renderer_(window_.Size()) {}
 

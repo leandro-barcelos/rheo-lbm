@@ -4,25 +4,35 @@
 #include <expected>
 #include <string>
 
+#include "rheo/domain/dem_data.h"
 #include "rheo/domain/image_data.h"
 #include "rheo/domain/project_document.h"
-#include "rheo/domain/terrain_data.h"
 
 namespace assets {
 
 struct AssetError {
   std::string message;
-};
+} __attribute__((aligned(32)));
 
-class ITerrainLoader {
+class IDemLoader {
  public:
-  virtual ~ITerrainLoader() = default;
-  [[nodiscard]] virtual std::expected<domain::SharedTerrain, AssetError> Load(
-      std::string const& path, float resolution_meters) const = 0;
+  IDemLoader() = default;
+  IDemLoader(const IDemLoader&) = default;
+  IDemLoader(IDemLoader&&) = delete;
+  IDemLoader& operator=(const IDemLoader&) = default;
+  IDemLoader& operator=(IDemLoader&&) = delete;
+  virtual ~IDemLoader() = default;
+  [[nodiscard]] virtual std::expected<domain::SharedDem, AssetError> Load(
+      std::string const& path) const = 0;
 };
 
 class IImageLoader {
  public:
+  IImageLoader() = default;
+  IImageLoader(const IImageLoader&) = default;
+  IImageLoader(IImageLoader&&) = delete;
+  IImageLoader& operator=(const IImageLoader&) = default;
+  IImageLoader& operator=(IImageLoader&&) = delete;
   virtual ~IImageLoader() = default;
   [[nodiscard]] virtual std::expected<domain::SharedImage, AssetError> Load(
       std::string const& path) const = 0;
@@ -30,6 +40,11 @@ class IImageLoader {
 
 class IProjectRepository {
  public:
+  IProjectRepository() = default;
+  IProjectRepository(const IProjectRepository&) = default;
+  IProjectRepository(IProjectRepository&&) = delete;
+  IProjectRepository& operator=(const IProjectRepository&) = default;
+  IProjectRepository& operator=(IProjectRepository&&) = delete;
   virtual ~IProjectRepository() = default;
   [[nodiscard]] virtual std::expected<domain::ProjectDocument, AssetError> Load(
       std::string const& path) const = 0;
@@ -38,10 +53,10 @@ class IProjectRepository {
       domain::ProjectDocument const& document) const = 0;
 };
 
-class TerrainLoader final : public ITerrainLoader {
+class DemLoader final : public IDemLoader {
  public:
-  [[nodiscard]] std::expected<domain::SharedTerrain, AssetError> Load(
-      std::string const& path, float resolution_meters) const override;
+  [[nodiscard]] std::expected<domain::SharedDem, AssetError> Load(
+      std::string const& path) const override;
 };
 
 class ImageLoader final : public IImageLoader {

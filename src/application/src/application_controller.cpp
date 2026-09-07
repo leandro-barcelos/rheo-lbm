@@ -21,11 +21,11 @@ std::string EnsureProjectExtension(std::string path) {
 }  // namespace
 
 application::ApplicationController::ApplicationController(
-    assets::ITerrainLoader const& terrain_loader,
+    assets::IDemLoader const& dem_loader,
     assets::IImageLoader const& image_loader,
     assets::IProjectRepository const& project_repository,
     simulation::ISimulationSession& simulation)
-    : terrain_loader_(terrain_loader),
+    : dem_loader_(dem_loader),
       image_loader_(image_loader),
       project_repository_(project_repository),
       simulation_(simulation) {}
@@ -43,33 +43,48 @@ void application::ApplicationController::ProcessPendingCommands() {
 }
 
 void application::ApplicationController::Update(double delta_ms) {
-  scene_state_.fluid = simulation_.Update(delta_ms);
+  scene_state_.lattice = simulation_.Update(delta_ms);
   view_state_.simulation_running = simulation_.IsRunning();
 }
 
 void application::ApplicationController::Handle(
     UpdateSimulationDraft const& command) {
+  auto const valid = domain::ValidateLatticeSettings(command.draft.lattice);
+  if (!valid) {
+    SetError(valid.error());
+    return;
+  }
+  if (scene_state_.dem &&
+      command.draft.lattice != view_state_.simulation.lattice) {
+    auto initialized =
+        simulation_.InitializeTerrain(scene_state_.dem, command.draft.lattice);
+    if (!initialized) {
+      SetError(initialized.error());
+      return;
+    }
+    scene_state_.lattice = simulation_.Update(0);
+    ++scene_state_.revision;
+  }
   view_state_.simulation = command.draft;
   view_state_.last_error.reset();
   RefreshSimulationConfig();
 }
 
 void application::ApplicationController::Handle(ImportTerrain const& command) {
-  float const resolution =
-      view_state_.simulation.dem_resolution.value_or(10.0F);
-  if (resolution <= 0.0F) {
-    SetError("DEM resolution must be greater than zero");
-    return;
-  }
-  auto terrain = terrain_loader_.Load(command.path, resolution);
+  auto terrain = dem_loader_.Load(command.path);
   if (!terrain) {
     SetError(terrain.error().message);
     return;
   }
 
-  simulation_.Clear();
-  scene_state_.terrain = std::move(*terrain);
-  scene_state_.fluid.reset();
+  auto initialized =
+      simulation_.InitializeTerrain(*terrain, view_state_.simulation.lattice);
+  if (!initialized) {
+    SetError(initialized.error());
+    return;
+  }
+  scene_state_.dem = std::move(*terrain);
+  scene_state_.lattice = simulation_.Update(0);
   ++scene_state_.revision;
   view_state_.terrain_path = command.path;
   view_state_.terrain_loaded = true;
@@ -107,31 +122,23 @@ void application::ApplicationController::Handle(LoadProject const& command) {
     return;
   }
 
-  auto const validation_errors =
-      domain::ValidateSimulationSettings(document->simulation);
-  if (!validation_errors.empty()) {
-    SetError("Invalid project: " + validation_errors.front());
+  auto valid = domain::ValidateLatticeSettings(document->simulation.lattice);
+  if (!valid) {
+    SetError("Invalid project: " + valid.error());
     return;
   }
-
-  float const resolution = document->simulation.dem_resolution.value_or(10.0F);
-  auto terrain = terrain_loader_.Load(document->terrain_path, resolution);
+  auto terrain = dem_loader_.Load(document->terrain_path);
   if (!terrain) {
     SetError(terrain.error().message);
     return;
   }
 
-  domain::SharedImage texture;
-  if (!document->terrain_texture_path.empty()) {
-    auto image = image_loader_.Load(document->terrain_texture_path);
-    if (!image) {
-      SetError(image.error().message);
-      return;
-    }
-    texture = std::move(*image);
+  auto initialized =
+      simulation_.InitializeTerrain(*terrain, document->simulation.lattice);
+  if (!initialized) {
+    SetError(initialized.error());
+    return;
   }
-
-  simulation_.Clear();
   view_state_.simulation = document->simulation;
   view_state_.terrain_path = document->terrain_path;
   view_state_.terrain_texture_path = document->terrain_texture_path;
@@ -139,9 +146,9 @@ void application::ApplicationController::Handle(LoadProject const& command) {
   view_state_.terrain_loaded = true;
   view_state_.simulation_running = false;
   view_state_.last_error.reset();
-  scene_state_.terrain = std::move(*terrain);
-  scene_state_.terrain_texture = std::move(texture);
-  scene_state_.fluid.reset();
+  scene_state_.dem = std::move(*terrain);
+  scene_state_.terrain_texture.reset();
+  scene_state_.lattice = simulation_.Update(0);
   ++scene_state_.revision;
   RefreshSimulationConfig();
 }
@@ -173,13 +180,7 @@ void application::ApplicationController::Handle(NewProject const&) {
 }
 
 void application::ApplicationController::Handle(PlaySimulation const&) {
-  if (!view_state_.can_play) {
-    SetError("Define all simulation parameters and import a terrain first");
-    return;
-  }
-  simulation_.Play();
-  view_state_.simulation_running = simulation_.IsRunning();
-  view_state_.last_error.reset();
+  SetError("Fluid dynamics is not available yet");
 }
 
 void application::ApplicationController::Handle(PauseSimulation const&) {
@@ -189,13 +190,18 @@ void application::ApplicationController::Handle(PauseSimulation const&) {
 }
 
 void application::ApplicationController::Handle(ResetSimulation const&) {
-  if (!view_state_.can_play) {
-    SetError("Cannot reset an incomplete simulation");
+  if (!scene_state_.dem) {
+    SetError("Import a DEM first");
     return;
   }
-  simulation_.Reset();
-  view_state_.simulation_running = false;
-  scene_state_.fluid = simulation_.Update(0.0);
+  auto result = simulation_.InitializeTerrain(scene_state_.dem,
+                                              view_state_.simulation.lattice);
+  if (!result) {
+    SetError(result.error());
+    return;
+  }
+  scene_state_.lattice = simulation_.Update(0);
+  ++scene_state_.revision;
   view_state_.last_error.reset();
 }
 
@@ -204,27 +210,13 @@ void application::ApplicationController::Handle(RequestQuit const&) {
 }
 
 void application::ApplicationController::RefreshSimulationConfig() {
-  view_state_.validation_errors =
-      domain::ValidateSimulationSettings(view_state_.simulation);
-  if (scene_state_.terrain == nullptr || !scene_state_.terrain->IsValid()) {
-    view_state_.validation_errors.emplace_back("Import a valid terrain");
-  }
-
-  auto config = domain::ValidateSimulationConfig(view_state_.simulation,
-                                                 scene_state_.terrain);
-  view_state_.can_play = config.has_value();
-  if (!config) {
-    if (simulation_.IsRunning() || simulation_.IsReady()) {
-      simulation_.Clear();
-    }
-    view_state_.simulation_running = false;
-    scene_state_.fluid.reset();
-    return;
-  }
-
-  simulation_.ApplyConfig(std::move(*config));
+  view_state_.validation_errors.clear();
+  if (auto valid =
+          domain::ValidateLatticeSettings(view_state_.simulation.lattice);
+      !valid)
+    view_state_.validation_errors.push_back(valid.error());
+  view_state_.can_play = false;
   view_state_.simulation_running = false;
-  scene_state_.fluid.reset();
 }
 
 void application::ApplicationController::SetError(std::string message) {

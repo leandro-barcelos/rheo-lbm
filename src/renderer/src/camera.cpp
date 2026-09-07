@@ -141,8 +141,11 @@ glm::mat4 renderer::Camera::ViewMatrix() const {
 
 glm::mat4 renderer::Camera::ProjectionMatrix(float aspect_ratio,
                                              float near_plane) const {
-  return glm::perspective(glm::radians(zoom_), aspect_ratio, near_plane,
-                          far_plane_);
+  // With a positive Vulkan viewport height, camera +Y (-Z in the world)
+  // points down on screen. Keep this sign so DEM north (+Z) is at the top
+  // while east (+X) stays on the right.
+  return glm::perspectiveRH_ZO(glm::radians(zoom_), aspect_ratio, near_plane,
+                              far_plane_);
 }
 
 void renderer::Camera::InitTopView(glm::vec3 const& bounds_min,
@@ -220,8 +223,9 @@ glm::vec3 renderer::Camera::ScreenToWorldPosition(double xpos, double ypos,
   float const ndc_x = ((static_cast<float>(std::floor(xpos)) + 0.5F) /
                        static_cast<float>(window_width) * 2.0F) -
                       1.0F;
-  float const ndc_y = 1.0F - ((static_cast<float>(std::floor(ypos)) + 0.5F) /
-                              static_cast<float>(window_height) * 2.0F);
+  float const ndc_y = ((static_cast<float>(std::floor(ypos)) + 0.5F) /
+                       static_cast<float>(window_height) * 2.0F) -
+                      1.0F;
 
   glm::mat4 const inv = glm::inverse(ProjectionMatrix(aspect) * ViewMatrix());
 

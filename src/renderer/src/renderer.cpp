@@ -8,8 +8,8 @@
 #include <utility>
 
 #include "camera.h"
-#include "fluid_renderer.h"
-#include "terrain_renderer.h"
+#include "lattice_renderer.h"
+#include "rheo/graphics/memory.h"
 
 namespace renderer {
 
@@ -21,8 +21,8 @@ class Renderer::Impl {
   void Init(graphics::Device const& device,
             graphics::SwapChain const& swap_chain,
             graphics::CommandPools const& command_pools) {
-    command_pools_ = &command_pools;
-    fluid_renderer_.Init(device, swap_chain);
+    CreateDepth(device, swap_chain.Extent());
+    lattice_renderer_.Init(device, swap_chain, depth_format_);
     vk::CommandBufferAllocateInfo allocation{
         .commandPool = *command_pools.Graphics(),
         .level = vk::CommandBufferLevel::ePrimary,
@@ -52,10 +52,16 @@ class Renderer::Impl {
       return;
     }
 
-    SyncScene(device, swap_chain, scene);
+    if (scene.dem != framed_dem_ && scene.lattice) {
+      auto const& l = *scene.lattice;
+      glm::vec3 shape{l.lattice_width, l.lattice_height, l.lattice_depth};
+      glm::vec3 half = 0.5F * shape / std::max({shape.x, shape.y, shape.z});
+      camera_.InitTopView(-half, half);
+      framed_dem_ = scene.dem;
+    }
     auto const simulation_signal =
-        scene.fluid && scene.fluid->ready_signal > 0
-            ? std::optional<std::uint64_t>(scene.fluid->ready_signal)
+        scene.lattice && scene.lattice->ready_signal > 0
+            ? std::optional<std::uint64_t>(scene.lattice->ready_signal)
             : std::nullopt;
     std::uint64_t const wait_value = simulation_signal.value_or(0);
     std::uint64_t const signal_value = frame_sync.GetNextTimelineValue();
@@ -78,14 +84,60 @@ class Renderer::Impl {
         .loadOp = vk::AttachmentLoadOp::eClear,
         .storeOp = vk::AttachmentStoreOp::eStore,
         .clearValue = clear_color};
+    vk::ImageMemoryBarrier2 depth_barrier{
+        .srcStageMask = vk::PipelineStageFlagBits2::eEarlyFragmentTests |
+                        vk::PipelineStageFlagBits2::eLateFragmentTests,
+        .srcAccessMask = depth_initialized_
+                             ? vk::AccessFlagBits2::eDepthStencilAttachmentWrite
+                             : vk::AccessFlags2{},
+        .dstStageMask = vk::PipelineStageFlagBits2::eEarlyFragmentTests |
+                        vk::PipelineStageFlagBits2::eLateFragmentTests,
+        .dstAccessMask = vk::AccessFlagBits2::eDepthStencilAttachmentRead |
+                         vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+        .oldLayout = depth_initialized_
+                         ? vk::ImageLayout::eDepthStencilAttachmentOptimal
+                         : vk::ImageLayout::eUndefined,
+        .newLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
+        .srcQueueFamilyIndex = vk::QueueFamilyIgnored,
+        .dstQueueFamilyIndex = vk::QueueFamilyIgnored,
+        .image = *depth_image_,
+        .subresourceRange = {.aspectMask = vk::ImageAspectFlagBits::eDepth,
+                             .baseMipLevel = 0,
+                             .levelCount = 1,
+                             .baseArrayLayer = 0,
+                             .layerCount = 1}};
+    command_buffer_.pipelineBarrier2(
+        {.imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &depth_barrier});
+    depth_initialized_ = true;
+    vk::RenderingAttachmentInfo depth_attachment{
+        .imageView = *depth_view_,
+        .imageLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
+        .loadOp = vk::AttachmentLoadOp::eClear,
+        .storeOp = vk::AttachmentStoreOp::eDontCare,
+        .clearValue = vk::ClearDepthStencilValue(1.0F, 0)};
     vk::RenderingInfo rendering{.renderArea = {.offset = {.x = 0, .y = 0},
                                                .extent = swap_chain.Extent()},
                                 .layerCount = 1,
                                 .colorAttachmentCount = 1,
-                                .pColorAttachments = &attachment};
+                                .pColorAttachments = &attachment,
+                                .pDepthAttachment = &depth_attachment};
     command_buffer_.beginRendering(rendering);
-    terrain_renderer_.Render(command_buffer_, swap_chain, camera_);
-    fluid_renderer_.Render(command_buffer_, swap_chain, scene.fluid, camera_);
+    lattice_renderer_.Render(command_buffer_, swap_chain, scene.lattice,
+                             camera_);
+    command_buffer_.endRendering();
+    // Overlay uses its existing color-only pipeline in a separate rendering
+    // scope.
+    vk::MemoryBarrier2 overlay_barrier{
+        .srcStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+        .srcAccessMask = vk::AccessFlagBits2::eColorAttachmentWrite,
+        .dstStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+        .dstAccessMask = vk::AccessFlagBits2::eColorAttachmentRead |
+                         vk::AccessFlagBits2::eColorAttachmentWrite};
+    command_buffer_.pipelineBarrier2(
+        {.memoryBarrierCount = 1, .pMemoryBarriers = &overlay_barrier});
+    attachment.loadOp = vk::AttachmentLoadOp::eLoad;
+    rendering.pDepthAttachment = nullptr;
+    command_buffer_.beginRendering(rendering);
     overlay.Render(graphics::CommandList{
         .native_handle = static_cast<VkCommandBuffer>(*command_buffer_)});
     command_buffer_.endRendering();
@@ -99,7 +151,8 @@ class Renderer::Impl {
     swap_chain.SetImageLayout(image_index, vk::ImageLayout::ePresentSrcKHR);
     command_buffer_.end();
 
-    vk::PipelineStageFlags wait_stage = vk::PipelineStageFlagBits::eVertexInput;
+    vk::PipelineStageFlags wait_stage =
+        vk::PipelineStageFlagBits::eVertexShader;
     vk::TimelineSemaphoreSubmitInfo timeline{
         .waitSemaphoreValueCount = simulation_signal ? 1U : 0U,
         .pWaitSemaphoreValues = simulation_signal ? &wait_value : nullptr,
@@ -131,33 +184,59 @@ class Renderer::Impl {
   }
 
   void Shutdown() {
-    terrain_renderer_ = {};
-    fluid_renderer_ = {};
+    lattice_renderer_.Shutdown();
     command_buffer_ = nullptr;
+    depth_view_ = nullptr;
+    depth_image_ = nullptr;
+    depth_memory_ = nullptr;
   }
 
  private:
-  void SyncScene(graphics::Device const& device,
-                 graphics::SwapChain const& swap_chain,
-                 application::SceneState const& scene) {
-    if (scene.revision == loaded_scene_revision_) {
-      return;
+  void CreateDepth(graphics::Device const& device, vk::Extent2D extent) {
+    depth_view_ = nullptr;
+    depth_image_ = nullptr;
+    depth_memory_ = nullptr;
+    depth_initialized_ = false;
+    for (auto format : {vk::Format::eD32Sfloat, vk::Format::eD16Unorm}) {
+      if (device.PhysicalDevice()
+              .getFormatProperties(format)
+              .optimalTilingFeatures &
+          vk::FormatFeatureFlagBits::eDepthStencilAttachment) {
+        depth_format_ = format;
+        break;
+      }
     }
-    loaded_scene_revision_ = scene.revision;
-    if (scene.terrain == nullptr || command_pools_ == nullptr) {
-      terrain_renderer_.Clear(device);
-      return;
-    }
-
-    terrain_renderer_.Init(device, swap_chain, *command_pools_, scene.terrain,
-                           scene.terrain_texture);
-    glm::vec3 bounds_min(std::numeric_limits<float>::infinity());
-    glm::vec3 bounds_max(-std::numeric_limits<float>::infinity());
-    for (auto const& sample : scene.terrain->samples) {
-      bounds_min = glm::min(bounds_min, sample.position);
-      bounds_max = glm::max(bounds_max, sample.position);
-    }
-    camera_.InitTopView(bounds_min, bounds_max);
+    if (depth_format_ == vk::Format::eUndefined)
+      throw std::runtime_error("No supported depth format");
+    depth_image_ = vk::raii::Image(
+        device.LogicalDevice(),
+        {.imageType = vk::ImageType::e2D,
+         .format = depth_format_,
+         .extent = {extent.width, extent.height, 1},
+         .mipLevels = 1,
+         .arrayLayers = 1,
+         .samples = vk::SampleCountFlagBits::e1,
+         .tiling = vk::ImageTiling::eOptimal,
+         .usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
+         .sharingMode = vk::SharingMode::eExclusive});
+    auto requirements = depth_image_.getMemoryRequirements();
+    depth_memory_ = vk::raii::DeviceMemory(
+        device.LogicalDevice(),
+        {.allocationSize = requirements.size,
+         .memoryTypeIndex = graphics::MemoryAllocator::FindMemoryType(
+             device, requirements.memoryTypeBits,
+             vk::MemoryPropertyFlagBits::eDeviceLocal)});
+    depth_image_.bindMemory(depth_memory_, 0);
+    depth_view_ = vk::raii::ImageView(
+        device.LogicalDevice(),
+        {.image = *depth_image_,
+         .viewType = vk::ImageViewType::e2D,
+         .format = depth_format_,
+         .subresourceRange = {.aspectMask = vk::ImageAspectFlagBits::eDepth,
+                              .baseMipLevel = 0,
+                              .levelCount = 1,
+                              .baseArrayLayer = 0,
+                              .layerCount = 1}});
   }
 
   void RecreateSwapChain(graphics::Device const& device,
@@ -165,6 +244,7 @@ class Renderer::Impl {
                          platform::Window const& window,
                          IOverlayPass& overlay) {
     swap_chain.RecreateSwapChain(device, window);
+    CreateDepth(device, swap_chain.Extent());
     overlay.OnFrameResourcesChanged(swap_chain.ImageCount());
     resize_pending_ = false;
   }
@@ -196,13 +276,15 @@ class Renderer::Impl {
     command_buffer_.pipelineBarrier2(dependency);
   }
 
+  vk::raii::DeviceMemory depth_memory_ = nullptr;
+  vk::raii::Image depth_image_ = nullptr;
+  vk::raii::ImageView depth_view_ = nullptr;
+  vk::Format depth_format_ = vk::Format::eUndefined;
+  bool depth_initialized_ = false;
+  domain::SharedDem framed_dem_;
   vk::raii::CommandBuffer command_buffer_ = nullptr;
-  FluidRenderer fluid_renderer_;
-  TerrainRenderer terrain_renderer_;
+  LatticeRenderer lattice_renderer_;
   Camera camera_;
-  graphics::CommandPools const* command_pools_ = nullptr;
-  std::uint64_t loaded_scene_revision_ =
-      std::numeric_limits<std::uint64_t>::max();
   bool resize_pending_ = false;
 };
 

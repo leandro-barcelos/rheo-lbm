@@ -50,6 +50,10 @@ int main() {
   Check(loaded->simulation.voxel_max_particles == 16);
   Check(loaded->simulation.dem_resolution == 5.0F);
 
+  Check(loaded->simulation.lattice.height_subdivisions == 13);
+  Check(loaded->simulation.lattice.upper_elevation_margin == 0);
+  loaded->simulation.lattice = {.height_subdivisions = 27,
+                                .upper_elevation_margin = 12.5F};
   auto const saved_path = directory / "round-trip.yaml";
   auto saved = repository.Save(saved_path.string(), *loaded);
   Check(saved.has_value());
@@ -58,6 +62,13 @@ int main() {
   Check(round_trip->terrain_path == loaded->terrain_path);
   Check(round_trip->simulation.yield_stress == loaded->simulation.yield_stress);
 
+  Check(round_trip->simulation.lattice == loaded->simulation.lattice);
+  Check(round_trip->terrain_texture_path == "colors.png");
+  {
+    std::ofstream output(legacy_path);
+    output << "parameters:\n  height_subdivisions: 0\n";
+  }
+  Check(!repository.Load(legacy_path.string()));
   std::filesystem::remove(legacy_path);
   std::filesystem::remove(saved_path);
   std::filesystem::remove(directory);

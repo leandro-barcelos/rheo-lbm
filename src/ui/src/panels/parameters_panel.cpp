@@ -1,6 +1,7 @@
 #include "parameters_panel.h"
 
 #include <filesystem>
+#include <limits>
 
 #include "ImGuiFileDialog.h"
 #include "imgui.h"
@@ -28,6 +29,9 @@ bool ui::ParametersPanel::Draw() {
   }
 
   ImGui::SetNextWindowPos(ImVec2(12.0F, 90.0F), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSizeConstraints(
+      ImVec2(480.0F, 220.0F), ImVec2(std::numeric_limits<float>::max(),
+                                     std::numeric_limits<float>::max()));
 
   ImGuiWindowFlags const window_flags =
       ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_MenuBar;
@@ -111,17 +115,6 @@ void ui::ParametersPanel::MenuBar() {
           "GeoTiff files{.tif,.tiff},.*", config);
     }
 
-    if (ImGui::MenuItem("Select visualization texture")) {
-      IGFD::FileDialogConfig config{};
-      config.path = std::filesystem::current_path().string();
-      config.filePathName = visualization_texture_path_;
-      config.flags = ImGuiFileDialogFlags_Modal;
-
-      ImGuiFileDialog::Instance()->OpenDialog(
-          kUploadTerrainDialogKey, "Upload Visualization Texture",
-          "Image files{.png,.jpg,.jpeg,.bmp,.tga,.tif,.tiff},.*", config);
-    }
-
     ImGui::Separator();
 
     bool debug = true;
@@ -154,7 +147,7 @@ bool ui::ParametersPanel::TabBar() {
 
   if (ImGui::BeginTabBar("TabBar")) {
     changed |= TerrainTab();
-    changed |= ParametersTab();
+    // Legacy fluid settings remain in project files until the solver migration.
 
     ImGui::EndTabBar();
   }
@@ -171,23 +164,13 @@ bool ui::ParametersPanel::TerrainTab() {
       ImGui::SetTooltip("Path to the DEM file");
     }
 
-    float dem_resolution = values_.dem_resolution.value_or(10.0F);
-    if (ImGui::InputFloat("DEM Resolution (m)", &dem_resolution, 1, 10)) {
-      values_.dem_resolution = dem_resolution;
-      changed = true;
-    }
-    if (ImGui::IsItemHovered()) {
-      ImGui::SetTooltip("m/pixel");
-    }
-
-    ImGui::Spacing();
-
-    ImGui::InputText("Visualization Texture", &visualization_texture_path_,
-                     ImGuiInputTextFlags_ReadOnly);
-    if (ImGui::IsItemHovered()) {
-      ImGui::SetTooltip("Path to the visualization texture");
-    }
-
+    ImGui::SetNextItemWidth(180.0F);
+    changed |= ImGui::InputInt("Height subdivisions",
+                               &values_.lattice.height_subdivisions);
+    ImGui::SetNextItemWidth(180.0F);
+    changed |=
+        ImGui::InputFloat("Upper elevation margin (m)",
+                          &values_.lattice.upper_elevation_margin, 1.0F, 10.0F);
     ImGui::EndTabItem();
   }
   return changed;

@@ -1,96 +1,104 @@
 #include "geotiff.h"
 
-#include <gdal.h>
 #include <gdal_priv.h>
+#include <ogr_spatialref.h>
 
 #include <algorithm>
-#include <utility>
+#include <array>
+#include <cmath>
+#include <limits>
+#include <memory>
+#include <stdexcept>
 
-namespace {
-
-GDALDataset* OpenGeoTiffDataset(char const* filename) {
+namespace assets {
+domain::DemData ReadGeoTiff(std::string const& path) {
   GDALAllRegister();
-  return reinterpret_cast<GDALDataset*>(GDALOpen(filename, GA_ReadOnly));
-}
-
-}  // namespace
-
-assets::GeoTiff::GeoTiff(std::string filename)
-    : filename_(std::move(filename)),
-      geotiff_dataset_(OpenGeoTiffDataset(filename_.c_str())) {
-  if (geotiff_dataset_ != nullptr) {
-    dimensions_ = {GDALGetRasterXSize(geotiff_dataset_),
-                   GDALGetRasterYSize(geotiff_dataset_),
-                   GDALGetRasterCount(geotiff_dataset_)};
-
-    has_geo_transform_ =
-        GDALGetGeoTransform(geotiff_dataset_, geo_transform_.data()) == CE_None;
+  std::unique_ptr<GDALDataset, decltype(&GDALClose)> source(
+      static_cast<GDALDataset*>(GDALOpen(path.c_str(), GA_ReadOnly)),
+      GDALClose);
+  if (!source) throw std::runtime_error("Could not open DEM: " + path);
+  int const width = source->GetRasterXSize(), height = source->GetRasterYSize();
+  if (width <= 0 || height <= 0 || source->GetRasterCount() < 1)
+    throw std::runtime_error("DEM dimensions are invalid");
+  std::array<double, 6> transform{};
+  if (source->GetGeoTransform(transform.data()) != CE_None ||
+      !std::ranges::all_of(transform,
+                           [](double v) { return std::isfinite(v); }) ||
+      transform[1] == 0 || transform[5] == 0)
+    throw std::runtime_error("DEM has no usable geographic pixel scale");
+  if (transform[2] != 0 || transform[4] != 0)
+    throw std::runtime_error("Rotated DEM transforms are not supported");
+  auto const* srs = source->GetSpatialRef();
+  if (!srs)
+    throw std::runtime_error("DEM coordinate reference system is missing");
+  double scale_x = 0, scale_z = 0;
+  if (srs->IsProjected()) {
+    scale_x = scale_z = srs->GetLinearUnits();
+  } else if (srs->IsGeographic()) {
+    constexpr double radius = 6378137.0;
+    double const radians_per_unit = srs->GetAngularUnits();
+    double const latitude =
+        (transform[3] + height * 0.5 * transform[5]) * radians_per_unit;
+    if (std::abs(latitude) >= 1.5707963267948966)
+      throw std::runtime_error(
+          "DEM center latitude is outside the supported range");
+    scale_z = radius * radians_per_unit;
+    scale_x = scale_z * std::cos(latitude);
+  } else {
+    throw std::runtime_error("Unsupported DEM coordinate reference system");
   }
-}
-
-assets::GeoTiff::~GeoTiff() {
-  if (geotiff_dataset_ != nullptr) {
-    GDALClose(geotiff_dataset_);
-  }
-}
-
-std::vector<domain::Elevation> assets::GeoTiff::Elevations(
-    int layer, float resolution_meters) {
-  if (geotiff_dataset_ == nullptr) {
-    return {};
-  }
-
-  if (dimensions_[0] <= 0 || dimensions_[1] <= 0 || dimensions_[2] <= 0) {
-    return {};
-  }
-
-  layer = std::max(layer, 1);
-  layer = std::min(layer, dimensions_[2]);
-
-  const int width = dimensions_[0];
-  const int height = dimensions_[1];
-
-  GDALRasterBand* band = geotiff_dataset_->GetRasterBand(layer);
-  if (band == nullptr) {
-    return {};
-  }
-
-  std::vector<float> buffer(static_cast<size_t>(width) * height);
-  CPLErr err = band->RasterIO(GF_Read, 0, 0, width, height, buffer.data(),
-                              width, height, GDT_Float32, 0, 0);
-  if (err != CE_None) {
-    return {};
-  }
-
-  std::vector<domain::Elevation> elevations;
-  elevations.reserve(static_cast<size_t>(width) * static_cast<size_t>(height));
-
-  for (int row_index = 0; row_index < height; ++row_index) {
-    for (int column_index = 0; column_index < width; ++column_index) {
-      const float width_denominator =
-          width > 1 ? static_cast<float>(width - 1) : 1.0F;
-      const float height_denominator =
-          height > 1 ? static_cast<float>(height - 1) : 1.0F;
-      const float u_coord =
-          static_cast<float>(column_index) / width_denominator;
-      const float v_coord = static_cast<float>(row_index) / height_denominator;
-      const auto pixel_x = static_cast<double>(column_index);
-      const auto pixel_y = static_cast<double>(row_index);
-
-      const double origin_x = has_geo_transform_ ? geo_transform_[0] : 0.0;
-      const double origin_z = has_geo_transform_ ? geo_transform_[3] : 0.0;
-      const double world_x =
-          origin_x + (pixel_x * static_cast<double>(resolution_meters));
-      const double world_z =
-          origin_z + (pixel_y * static_cast<double>(resolution_meters));
-      const float elevation = buffer[(static_cast<size_t>(row_index) * width) +
-                                     static_cast<size_t>(column_index)];
-      elevations.push_back({.uv = {u_coord, v_coord},
-                            .elevation = elevation,
-                            .position = {static_cast<float>(world_x), elevation,
-                                         static_cast<float>(world_z)}});
+  domain::DemData dem;
+  dem.width = static_cast<std::uint32_t>(width);
+  dem.height = static_cast<std::uint32_t>(height);
+  dem.pixel_size_meters = {std::abs(transform[1]) * scale_x,
+                           std::abs(transform[5]) * scale_z};
+  auto* band = source->GetRasterBand(1);
+  // Elevation samples are meters unless the band explicitly declares feet.
+  std::string const unit = band->GetUnitType();
+  double elevation_unit = 1;
+  if (unit == "ft" || unit == "foot" || unit == "feet")
+    elevation_unit = 0.3048;
+  else if (unit == "US survey foot" || unit == "us_survey_foot")
+    elevation_unit = 1200.0 / 3937.0;
+  else if (!unit.empty() && unit != "m" && unit != "meter" && unit != "metre")
+    throw std::runtime_error("Unsupported DEM elevation unit: " + unit);
+  int has_nodata = 0;
+  double const nodata = band->GetNoDataValue(&has_nodata);
+  double const offset = band->GetOffset(), scale = band->GetScale();
+  std::vector<double> values(static_cast<std::size_t>(width) * height);
+  if (band->RasterIO(GF_Read, 0, 0, width, height, values.data(), width, height,
+                     GDT_Float64, 0, 0) != CE_None)
+    throw std::runtime_error("Could not read DEM elevations");
+  std::vector<unsigned char> mask(values.size(), 255);
+  if (!(band->GetMaskFlags() & GMF_ALL_VALID) &&
+      band->GetMaskBand()->RasterIO(GF_Read, 0, 0, width, height, mask.data(),
+                                    width, height, GDT_Byte, 0, 0) != CE_None)
+    throw std::runtime_error("Could not read DEM validity mask");
+  dem.samples.resize(values.size());
+  dem.min_elevation = std::numeric_limits<float>::infinity();
+  dem.max_elevation = -dem.min_elevation;
+  for (int row = 0; row < height; ++row) {
+    for (int col = 0; col < width; ++col) {
+      auto const i = static_cast<std::size_t>(row) * width + col;
+      int const x = transform[1] > 0 ? col : width - 1 - col;
+      int const z = transform[5] > 0 ? row : height - 1 - row;
+      float value =
+          static_cast<float>((values[i] * scale + offset) * elevation_unit);
+      if (!mask[i] || !std::isfinite(values[i]) ||
+          (has_nodata && values[i] == nodata) || !std::isfinite(value))
+        value = std::numeric_limits<float>::quiet_NaN();
+      else {
+        dem.min_elevation = std::min(dem.min_elevation, value);
+        dem.max_elevation = std::max(dem.max_elevation, value);
+      }
+      dem.samples[static_cast<std::size_t>(z) * width + x] = {
+          .coordinate = {x, z}, .elevation = value, .pad0 = 0};
     }
   }
-
-  return elevations;
+  if (!dem.IsValid())
+    throw std::runtime_error("DEM has invalid scale or no valid elevations");
+  for (auto& sample : dem.samples)
+    if (!std::isfinite(sample.elevation)) sample.elevation = dem.min_elevation;
+  return dem;
 }
+}  // namespace assets

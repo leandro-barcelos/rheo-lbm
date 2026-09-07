@@ -88,7 +88,7 @@ vk::raii::Pipeline graphics::PipelineBuilder::Graphics(
       vert_shader_stage_info, frag_shader_stage_info};
 
   vk::PipelineVertexInputStateCreateInfo vertex_input_info{
-      .vertexBindingDescriptionCount = 1,
+      .vertexBindingDescriptionCount = options.vertex_pulling ? 0U : 1U,
       .pVertexBindingDescriptions = &binding_description,
       .vertexAttributeDescriptionCount =
           static_cast<uint32_t>(attribute_descriptions.size()),
@@ -109,6 +109,10 @@ vk::raii::Pipeline graphics::PipelineBuilder::Graphics(
       .depthBiasEnable = vk::False,
       .lineWidth = 1.0F};
 
+  vk::PipelineDepthStencilStateCreateInfo depth_stencil{
+      .depthTestEnable = options.depth_test_enable,
+      .depthWriteEnable = options.depth_write_enable,
+      .depthCompareOp = vk::CompareOp::eLess};
   vk::PipelineMultisampleStateCreateInfo multisampling{
       .rasterizationSamples = vk::SampleCountFlagBits::e1,
       .sampleShadingEnable = vk::False};
@@ -147,13 +151,15 @@ vk::raii::Pipeline graphics::PipelineBuilder::Graphics(
               .pViewportState = &viewport_state,
               .pRasterizationState = &rasterizer,
               .pMultisampleState = &multisampling,
+              .pDepthStencilState = &depth_stencil,
               .pColorBlendState = &color_blending,
               .pDynamicState = &dynamic_state,
               .layout = pipeline_layout,
               .renderPass = nullptr},
           vk::PipelineRenderingCreateInfo{
               .colorAttachmentCount = 1,
-              .pColorAttachmentFormats = &swap_chain.SurfaceFormat().format},
+              .pColorAttachmentFormats = &swap_chain.SurfaceFormat().format,
+              .depthAttachmentFormat = options.depth_format},
       };
 
   return {device.LogicalDevice(), nullptr,

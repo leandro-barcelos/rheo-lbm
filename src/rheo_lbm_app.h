@@ -41,7 +41,7 @@ class RheoLBMApp {
   graphics::SwapChain swap_chain_;
   graphics::CommandPools command_pools_;
   graphics::FrameSync frame_sync_;
-  assets::TerrainLoader terrain_loader_;
+  assets::DemLoader dem_loader_;
   assets::ImageLoader image_loader_;
   assets::ProjectRepository project_repository_;
   simulation::SimulationSession simulation_;

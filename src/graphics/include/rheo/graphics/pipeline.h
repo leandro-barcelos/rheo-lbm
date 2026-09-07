@@ -18,7 +18,9 @@ class PipelineBuilder {
     bool enable_blending = true;
     bool depth_test_enable = false;
     bool depth_write_enable = false;
-  } __attribute__((aligned(32))) __attribute__((packed));
+    bool vertex_pulling = false;
+    vk::Format depth_format = vk::Format::eUndefined;
+  } __attribute__((aligned(32)));
 
   [[nodiscard]] static vk::raii::Pipeline Compute(
       graphics::Device const& device,

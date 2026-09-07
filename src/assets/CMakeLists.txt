@@ -3,7 +3,7 @@ add_library(
     src/geotiff.cpp
     src/image_loader.cpp
     src/project_repository.cpp
-    src/terrain_loader.cpp
+    src/dem_loader.cpp
 )
 add_library(rheo::assets ALIAS rheo_assets)
 target_include_directories(rheo_assets PUBLIC include PRIVATE src)

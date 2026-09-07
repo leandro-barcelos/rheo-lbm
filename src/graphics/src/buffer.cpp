@@ -15,12 +15,14 @@ graphics::AllocatedBuffer graphics::BufferAllocator::CreateBuffer(
   std::vector<uint32_t> queue_family_indices{device.ComputeQueueFamilyIndex(),
                                              device.GraphicsQueueFamilyIndex()};
 
+  bool const shared = queue_family_indices[0] != queue_family_indices[1];
   vk::BufferCreateInfo buffer_info{
       .size = size,
       .usage = usage,
-      .sharingMode = vk::SharingMode::eConcurrent,
+      .sharingMode =
+          shared ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive,
       .queueFamilyIndexCount =
-          static_cast<uint32_t>(queue_family_indices.size()),
+          shared ? static_cast<uint32_t>(queue_family_indices.size()) : 0U,
       .pQueueFamilyIndices = queue_family_indices.data(),
   };
 

@@ -106,7 +106,7 @@ function(compile_slang_shaders TARGET_NAME SHADER_FILE OUTPUT_DIR OUTPUT_SPIRV)
             ${SLANGC_EXECUTABLE} ${SHADER_FILE_ABS} -target spirv -profile
             spirv_1_4+spvRayQueryKHR -emit-spirv-directly
             -fvk-use-entrypoint-name ${ENTRY_ARGS} -o ${OUTPUT_SPIRV}
-        DEPENDS ${SHADER_FILE_ABS}
+        DEPENDS ${SHADER_FILE_ABS} "${CMAKE_SOURCE_DIR}/shaders/lattice_types.slang"
         COMMENT "Compiling Slang Shaders: ${SHADER_FILE}"
         VERBATIM
     )
@@ -115,30 +115,10 @@ endfunction()
 
 set(SHADERS_DIR shaders)
 
-compile_slang_shaders(bucket_compute_shader "shaders/compute/bucket.slang" "${SHADERS_DIR}/compute" "${SHADERS_DIR}/compute/bucket.spv"
-    -entry fluid_bucket
-    -entry wall_bucket
-    -entry clear_bucket
+compile_slang_shaders(voxelize_terrain_shader "shaders/compute/voxelize_terrain.slang" "${SHADERS_DIR}/compute" "${SHADERS_DIR}/compute/voxelize_terrain.spv"
+    -entry voxelize_terrain
 )
-compile_slang_shaders(density_compute_shader "shaders/compute/density.slang" "${SHADERS_DIR}/compute" "${SHADERS_DIR}/compute/density.spv"
-    -entry comp_main
+compile_slang_shaders(lattice_render_shader "shaders/graphics/lattice.slang" "${SHADERS_DIR}/graphics" "${SHADERS_DIR}/graphics/lattice.spv"
+    -entry vert_main -entry frag_main
 )
-compile_slang_shaders(vel_pos_compute_shader "shaders/compute/vel_pos.slang" "${SHADERS_DIR}/compute" "${SHADERS_DIR}/compute/vel_pos.spv"
-    -entry comp_main
-)
-compile_slang_shaders(particle_render_shader "shaders/graphics/particle.slang" "${SHADERS_DIR}/graphics" "${SHADERS_DIR}/graphics/particle.spv"
-    -entry vert_main
-    -entry frag_main
-)
-compile_slang_shaders(terrain_render_shader "shaders/graphics/terrain.slang" "${SHADERS_DIR}/graphics" "${SHADERS_DIR}/graphics/terrain.spv"
-    -entry vert_main
-    -entry frag_main
-)
-add_dependencies(
-    ${PROJECT_NAME}
-    bucket_compute_shader
-    density_compute_shader
-    vel_pos_compute_shader
-    particle_render_shader
-    terrain_render_shader
-)
+add_dependencies(${PROJECT_NAME} voxelize_terrain_shader lattice_render_shader)

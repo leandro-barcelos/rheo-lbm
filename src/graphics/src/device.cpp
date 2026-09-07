@@ -97,12 +97,19 @@ void graphics::Device::FindQueues(vk::SurfaceKHR surface) {
       }
     }
 
-    if (physical_device_.getSurfaceSupportKHR(family_index, surface) != 0U) {
+    if (surface &&
+        physical_device_.getSurfaceSupportKHR(family_index, surface) != 0U) {
       queue_indices_.SetPresent(family_index);
     }
   }
 
-  if (!queue_indices_.IsComplete() || !queue_indices_.HasAsyncCompute()) {
+  if (!surface && queue_indices_.Graphics())
+    queue_indices_.SetPresent(*queue_indices_.Graphics());
+  if (!queue_indices_.Compute() && queue_indices_.Graphics() &&
+      (properties[*queue_indices_.Graphics()].queueFlags &
+       vk::QueueFlagBits::eCompute))
+    queue_indices_.SetCompute(*queue_indices_.Graphics());
+  if (!queue_indices_.IsComplete()) {
     throw std::runtime_error("[ERROR] Vulkan: failed to find required queues!");
   }
 }
@@ -127,11 +134,11 @@ bool graphics::Device::IsDeviceSuitable(
       std::ranges::any_of(queue_families, [](auto const& qfp) {
         return !!(qfp.queueFlags & vk::QueueFlagBits::eGraphics);
       });
-  bool supports_present = false;
+  bool supports_present = !surface;
   for (size_t queue_index = 0; queue_index < queue_families.size();
        ++queue_index) {
-    if (physical_device.getSurfaceSupportKHR(static_cast<uint32_t>(queue_index),
-                                             surface) != 0U) {
+    if (surface && physical_device.getSurfaceSupportKHR(
+                       static_cast<uint32_t>(queue_index), surface) != 0U) {
       supports_present = true;
       break;
     }

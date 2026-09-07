@@ -15,7 +15,7 @@
 #include "rheo/graphics/descriptor.h"
 #include "rheo/graphics/device.h"
 #include "rheo/graphics/frame_sync.h"
-#include "rheo/simulation/fluid_types.h"
+#include "rheo/simulation/simulation_types.h"
 
 namespace simulation {
 
@@ -76,9 +76,9 @@ class FluidSimulator {
   [[nodiscard]] uint32_t FluidParticleCount() const {
     return uniform_buffer_data_.fluid_particle_count;
   }
-  [[nodiscard]] graphics::AllocatedBuffer const& ElevationBuffer() const {
-    return elevation_buffer_;
-  }
+  // [[nodiscard]] graphics::AllocatedBuffer const& ElevationBuffer() const {
+  //   return elevation_buffer_;
+  // }
   [[nodiscard]] uint32_t ElevationSampleCount() const {
     return uniform_buffer_data_.elevation_width *
            uniform_buffer_data_.elevation_height;
@@ -87,7 +87,7 @@ class FluidSimulator {
  private:
   UniformBufferObject uniform_buffer_data_;
   std::vector<uint32_t> bucket_;
-  std::vector<FluidParticle> fluid_particles_;
+  std::vector<Cell> fluid_particles_;
   std::vector<WallParticle> wall_particles_;
   graphics::AllocatedBuffer uniform_buffer_;
   std::array<graphics::AllocatedBuffer, 2> fluid_particles_buffers_;
@@ -100,81 +100,84 @@ class FluidSimulator {
   void SwapParticleBufferIndices() { std::swap(read_index_, write_index_); }
   static float DampingCoefficient(float coefficient_of_restitution);
 
-  // Bucket Shader
-  vk::raii::DescriptorSetLayout bucket_descriptor_set_layout_ = nullptr;
-  vk::raii::PipelineLayout bucket_pipeline_layout_ = nullptr;
-  vk::raii::Pipeline clear_bucket_pipeline_ = nullptr;
-  vk::raii::Pipeline fluid_bucket_pipeline_ = nullptr;
-  vk::raii::Pipeline wall_bucket_pipeline_ = nullptr;
-  graphics::DescriptorAllocator bucket_descriptor_allocator_;
-  vk::raii::DescriptorSet bucket_descriptor_set_ = nullptr;
-  vk::raii::CommandBuffer clear_bucket_secondary_command_buffer_ = nullptr;
-  vk::raii::CommandBuffer fluid_bucket_secondary_command_buffer_ = nullptr;
-  vk::raii::CommandBuffer wall_bucket_secondary_command_buffer_ = nullptr;
-  vk::raii::CommandBuffer bucket_primary_command_buffer_ = nullptr;
+  // // Bucket Shader
+  // vk::raii::DescriptorSetLayout bucket_descriptor_set_layout_ = nullptr;
+  // vk::raii::PipelineLayout bucket_pipeline_layout_ = nullptr;
+  // vk::raii::Pipeline clear_bucket_pipeline_ = nullptr;
+  // vk::raii::Pipeline fluid_bucket_pipeline_ = nullptr;
+  // vk::raii::Pipeline wall_bucket_pipeline_ = nullptr;
+  // graphics::DescriptorAllocator bucket_descriptor_allocator_;
+  // vk::raii::DescriptorSet bucket_descriptor_set_ = nullptr;
+  // vk::raii::CommandBuffer clear_bucket_secondary_command_buffer_ = nullptr;
+  // vk::raii::CommandBuffer fluid_bucket_secondary_command_buffer_ = nullptr;
+  // vk::raii::CommandBuffer wall_bucket_secondary_command_buffer_ = nullptr;
+  // vk::raii::CommandBuffer bucket_primary_command_buffer_ = nullptr;
 
-  void CreateBucketDescriptorSetLayout(graphics::Device const& device);
-  void CreateBucketPipelines(graphics::Device const& device);
-  void CreateBuffers(graphics::Device const& device,
-                     graphics::CommandPools const& command_pools);
-  void CreateFluidBucketDescriptorSets(
-      graphics::Device const& device,
-      graphics::DescriptorAllocator const& descriptor_allocator);
-  void CreateBucketCommandBuffers(graphics::Device const& device,
-                                  graphics::CommandPools const& command_pools);
+  // void CreateBucketDescriptorSetLayout(graphics::Device const& device);
+  // void CreateBucketPipelines(graphics::Device const& device);
+  // void CreateBuffers(graphics::Device const& device,
+  //                    graphics::CommandPools const& command_pools);
+  // void CreateFluidBucketDescriptorSets(
+  //     graphics::Device const& device,
+  //     graphics::DescriptorAllocator const& descriptor_allocator);
+  // void CreateBucketCommandBuffers(graphics::Device const& device,
+  //                                 graphics::CommandPools const&
+  //                                 command_pools);
 
-  void RecordClearBucketCommandBuffer();
-  void RecordFluidBucketCommandBuffer();
-  void RecordWallBucketCommandBuffer();
-  void RecordBucketPrimaryCommandBuffer();
-  [[nodiscard]] uint64_t DispatchBucket(graphics::Device const& device,
-                                        graphics::FrameSync& frame_sync,
-                                        uint64_t wait_value);
+  // void RecordClearBucketCommandBuffer();
+  // void RecordFluidBucketCommandBuffer();
+  // void RecordWallBucketCommandBuffer();
+  // void RecordBucketPrimaryCommandBuffer();
+  // [[nodiscard]] uint64_t DispatchBucket(graphics::Device const& device,
+  //                                       graphics::FrameSync& frame_sync,
+  //                                       uint64_t wait_value);
 
-  // Density Shader
-  vk::raii::CommandBuffer density_command_buffer_ = nullptr;
-  vk::raii::PipelineLayout density_pipeline_layout_ = nullptr;
-  vk::raii::Pipeline density_pipeline_ = nullptr;
-  vk::raii::DescriptorSetLayout density_descriptor_set_layout_ = nullptr;
-  graphics::DescriptorAllocator density_descriptor_allocator_;
-  vk::raii::DescriptorSet density_descriptor_set_ = nullptr;
+  // // Density Shader
+  // vk::raii::CommandBuffer density_command_buffer_ = nullptr;
+  // vk::raii::PipelineLayout density_pipeline_layout_ = nullptr;
+  // vk::raii::Pipeline density_pipeline_ = nullptr;
+  // vk::raii::DescriptorSetLayout density_descriptor_set_layout_ = nullptr;
+  // graphics::DescriptorAllocator density_descriptor_allocator_;
+  // vk::raii::DescriptorSet density_descriptor_set_ = nullptr;
 
-  void CreateDensityDescriptorSetLayout(graphics::Device const& device);
-  void CreateDensityPipeline(graphics::Device const& device);
-  void CreateDensityDescriptorSets(
-      graphics::Device const& device,
-      graphics::DescriptorAllocator const& descriptor_allocator);
-  void CreateDensityCommandBuffers(graphics::Device const& device,
-                                   graphics::CommandPools const& command_pools);
+  // void CreateDensityDescriptorSetLayout(graphics::Device const& device);
+  // void CreateDensityPipeline(graphics::Device const& device);
+  // void CreateDensityDescriptorSets(
+  //     graphics::Device const& device,
+  //     graphics::DescriptorAllocator const& descriptor_allocator);
+  // void CreateDensityCommandBuffers(graphics::Device const& device,
+  //                                  graphics::CommandPools const&
+  //                                  command_pools);
 
-  void RecordDensityCommandBuffer();
-  [[nodiscard]] uint64_t DispatchDensity(graphics::Device const& device,
-                                         graphics::FrameSync& frame_sync,
-                                         uint64_t wait_value);
+  // void RecordDensityCommandBuffer();
+  // [[nodiscard]] uint64_t DispatchDensity(graphics::Device const& device,
+  //                                        graphics::FrameSync& frame_sync,
+  //                                        uint64_t wait_value);
 
-  // Vel-Pos Shader
-  domain::SharedTerrain terrain_;
-  graphics::AllocatedBuffer elevation_buffer_;
-  PushConstants push_constants_{};
-  vk::raii::CommandBuffer vel_pos_command_buffer_ = nullptr;
-  vk::raii::PipelineLayout vel_pos_pipeline_layout_ = nullptr;
-  vk::raii::Pipeline vel_pos_pipeline_ = nullptr;
-  vk::raii::DescriptorSetLayout vel_pos_descriptor_set_layout_ = nullptr;
-  graphics::DescriptorAllocator vel_pos_descriptor_allocator_;
-  vk::raii::DescriptorSet vel_pos_descriptor_set_ = nullptr;
+  // // Vel-Pos Shader
+  // domain::SharedDem dem_;
+  // graphics::AllocatedBuffer elevation_buffer_;
+  // PushConstants push_constants_{};
+  // vk::raii::CommandBuffer vel_pos_command_buffer_ = nullptr;
+  // vk::raii::PipelineLayout vel_pos_pipeline_layout_ = nullptr;
+  // vk::raii::Pipeline vel_pos_pipeline_ = nullptr;
+  // vk::raii::DescriptorSetLayout vel_pos_descriptor_set_layout_ = nullptr;
+  // graphics::DescriptorAllocator vel_pos_descriptor_allocator_;
+  // vk::raii::DescriptorSet vel_pos_descriptor_set_ = nullptr;
 
-  void CreateVelPosDescriptorSetLayout(graphics::Device const& device);
-  void CreateVelPosPipeline(graphics::Device const& device);
-  void CreateVelPosDescriptorSets(
-      graphics::Device const& device,
-      graphics::DescriptorAllocator const& descriptor_allocator);
-  void CreateVelPosCommandBuffers(graphics::Device const& device,
-                                  graphics::CommandPools const& command_pools);
+  // void CreateVelPosDescriptorSetLayout(graphics::Device const& device);
+  // void CreateVelPosPipeline(graphics::Device const& device);
+  // void CreateVelPosDescriptorSets(
+  //     graphics::Device const& device,
+  //     graphics::DescriptorAllocator const& descriptor_allocator);
+  // void CreateVelPosCommandBuffers(graphics::Device const& device,
+  //                                 graphics::CommandPools const&
+  //                                 command_pools);
 
-  void RecordVelPosCommandBuffer();
-  [[nodiscard]] uint64_t DispatchVelPos(graphics::Device const& device,
-                                        graphics::FrameSync& frame_sync,
-                                        uint64_t wait_value);
+  // void RecordVelPosCommandBuffer();
+  // [[nodiscard]] uint64_t DispatchVelPos(graphics::Device const& device,
+  //                                       graphics::FrameSync& frame_sync,
+  //                                       uint64_t wait_value);
 };
 
 }  // namespace simulation

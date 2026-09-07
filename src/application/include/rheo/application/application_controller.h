@@ -12,7 +12,7 @@ namespace application {
 
 class ApplicationController final : public ICommandSink {
  public:
-  ApplicationController(assets::ITerrainLoader const& terrain_loader,
+  ApplicationController(assets::IDemLoader const& dem_loader,
                         assets::IImageLoader const& image_loader,
                         assets::IProjectRepository const& project_repository,
                         simulation::ISimulationSession& simulation);
@@ -43,7 +43,7 @@ class ApplicationController final : public ICommandSink {
   void RefreshSimulationConfig();
   void SetError(std::string message);
 
-  assets::ITerrainLoader const& terrain_loader_;
+  assets::IDemLoader const& dem_loader_;
   assets::IImageLoader const& image_loader_;
   assets::IProjectRepository const& project_repository_;
   simulation::ISimulationSession& simulation_;

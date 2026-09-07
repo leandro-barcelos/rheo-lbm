@@ -8,11 +8,13 @@
 #include <utility>
 #include <vector>
 
-#include "rheo/domain/terrain_data.h"
+#include "rheo/domain/dem_data.h"
+#include "rheo/domain/lattice_settings.h"
 
 namespace domain {
 
 struct SimulationSettingsDraft {
+  LatticeSettings lattice;
   std::optional<float> total_fluid_volume;
   std::optional<float> initial_particle_spacing;
   std::optional<float> dem_resolution;
@@ -23,7 +25,7 @@ struct SimulationSettingsDraft {
   std::optional<float> coefficient_of_restitution;
   std::optional<float> friction;
   std::optional<float> yield_stress;
-};
+} __attribute__((aligned(128)));
 
 struct SimulationConfig {
   std::uint32_t voxel_max_particles = 0;
@@ -32,11 +34,11 @@ struct SimulationConfig {
   float viscosity = 0.0F;
   float gas_constant = 0.0F;
   float coefficient_of_restitution = 0.0F;
-  SharedTerrain terrain;
+  SharedDem dem;
   float friction = 0.0F;
   float yield_stress = 0.0F;
   float initial_particle_spacing = 0.0F;
-};
+} __attribute__((aligned(64)));
 
 [[nodiscard]] inline std::vector<std::string> ValidateSimulationSettings(
     SimulationSettingsDraft const& draft) {
@@ -79,9 +81,9 @@ struct SimulationConfig {
 }
 
 [[nodiscard]] inline std::optional<SimulationConfig> ValidateSimulationConfig(
-    SimulationSettingsDraft const& draft, SharedTerrain terrain) {
-  if (!ValidateSimulationSettings(draft).empty() || terrain == nullptr ||
-      !terrain->IsValid()) {
+    SimulationSettingsDraft const& draft, SharedDem dem) {
+  if (!ValidateSimulationSettings(draft).empty() || dem == nullptr ||
+      !dem->IsValid()) {
     return std::nullopt;
   }
 
@@ -92,7 +94,7 @@ struct SimulationConfig {
       .viscosity = *draft.viscosity,
       .gas_constant = *draft.gas_constant,
       .coefficient_of_restitution = *draft.coefficient_of_restitution,
-      .terrain = std::move(terrain),
+      .dem = std::move(dem),
       .friction = *draft.friction,
       .yield_stress = *draft.yield_stress,
       .initial_particle_spacing = *draft.initial_particle_spacing,
