@@ -69,6 +69,49 @@ int main() {
     output << "parameters:\n  height_subdivisions: 0\n";
   }
   Check(!repository.Load(legacy_path.string()));
+  loaded->edits = domain::LatticeEdits{std::string(64, 'a'),
+                                       {3, 4, 3, 36, 0.31415927F, 3},
+                                       {{3, 3, 4}, {15, 1, 3}}};
+  Check(repository.Save(saved_path.string(), *loaded).has_value());
+  round_trip = repository.Load(saved_path.string());
+  Check(round_trip && round_trip->edits &&
+        round_trip->edits->runs.size() == 2 &&
+        round_trip->edits->runs == loaded->edits->runs);
+  Check(round_trip->edits->definition.meters_per_cell ==
+        loaded->edits->definition.meters_per_cell);
+  auto valid = [&](std::string edits) {
+    std::ofstream out(legacy_path);
+    out << "version: 2\nparameters: {}\nlattice_edits:\n  dem_sha256: "
+        << std::string(64, 'a')
+        << "\n  shape: [3, 4, 3]\n  meters_per_cell: 2\n  "
+           "terrain_elevation_cells: 3\n  runs: "
+        << edits << "\n";
+    out.close();
+    return repository.Load(legacy_path.string()).has_value();
+  };
+  Check(!valid("[[3, 1, 256]]"));
+  Check(!valid("[[3, 2, 4], [4, 1, 3]]"));
+  Check(!valid("[[35, 2, 3]]"));
+  Check(!valid("[[3, 0, 3]]"));
+  Check(!valid("[[3, 1, -1]]"));
+  Check(!valid("[[3, -1, 3]]"));
+  {
+    std::ofstream out(legacy_path);
+    out << "version: 2\nparameters: {}\nlattice_edits:\n  dem_sha256: "
+        << std::string(64, 'a')
+        << "\n  shape: [-1, 4, 3]\n  meters_per_cell: 2\n  "
+           "terrain_elevation_cells: 3\n  runs: []\n";
+  }
+  Check(!repository.Load(legacy_path.string()));
+  // Rename failure must preserve the existing destination and clean the
+  // temporary.
+  auto destination = directory / "existing-directory";
+  std::filesystem::create_directory(destination);
+  Check(!repository.Save(destination.string(), *loaded));
+  Check(std::filesystem::is_directory(destination));
+  for (auto const& entry : std::filesystem::directory_iterator(directory))
+    Check(entry.path().filename().string().find(".tmp.") == std::string::npos);
+  std::filesystem::remove(destination);
   std::filesystem::remove(legacy_path);
   std::filesystem::remove(saved_path);
   std::filesystem::remove(directory);

@@ -49,12 +49,28 @@ class FakeSession final : public simulation::ISimulationSession {
   bool fail = false;
   std::optional<simulation::LatticeRenderSnapshot> snapshot;
   std::expected<void, std::string> InitializeTerrain(
-      domain::SharedDem, domain::LatticeSettings) override {
+      domain::SharedDem, domain::LatticeSettings,
+      std::optional<domain::LatticeEdits> const&) override {
     ++initializations;
     if (fail) return std::unexpected("GPU failure");
+    changed = false;
     snapshot = simulation::LatticeRenderSnapshot{
         .cell_count = 13,
         .ready_signal = static_cast<std::uint64_t>(initializations)};
+    return {};
+  }
+  simulation::EditState Editing() const override {
+    return {.changed = changed};
+  }
+  bool changed = false;
+  void BeginStroke() override {}
+  void EndStroke() override {}
+  std::expected<void, std::string> Edit(
+      simulation::EditOperation const&) override {
+    changed = false;
+    return {};
+  }
+  std::optional<domain::LatticeEdits> ExportEdits() const override {
     return {};
   }
   void Play() override { throw std::runtime_error("SPH must remain disabled"); }
@@ -94,6 +110,23 @@ int main() {
   submit(UpdateSimulationDraft{draft});
   Check(session.initializations == 2 &&
         app.ViewState().simulation.lattice.height_subdivisions == 26);
+  session.changed = true;
+  draft.lattice.height_subdivisions = 28;
+  submit(UpdateSimulationDraft{draft});
+  Check(app.ViewState().confirm_discard && session.initializations == 2 &&
+        app.ViewState().simulation.lattice.height_subdivisions == 26);
+  submit(ConfirmDiscard{false});
+  Check(!app.ViewState().confirm_discard && session.changed &&
+        app.ViewState().simulation.lattice.height_subdivisions == 26);
+  submit(UpdateSimulationDraft{draft});
+  session.fail = true;
+  submit(ConfirmDiscard{true});
+  Check(app.ViewState().confirm_discard && session.changed &&
+        app.ViewState().simulation.lattice.height_subdivisions == 26);
+  session.fail = false;
+  submit(ConfirmDiscard{false});
+  session.changed = false;
+  session.initializations = 2;
   auto revision = app.SceneState().revision;
   draft.lattice.height_subdivisions = 0;
   submit(UpdateSimulationDraft{draft});
@@ -120,7 +153,7 @@ int main() {
         !app.ViewState().simulation.total_fluid_volume);
   int before = session.initializations;
   submit(ResetSimulation{});
-  Check(session.initializations == before + 1 &&
+  Check(session.initializations == before &&
         app.SceneState().lattice.has_value());
   submit(PlaySimulation{});
   Check(!app.ViewState().simulation_running);

@@ -40,6 +40,12 @@ class ApplicationController final : public ICommandSink {
   void Handle(PauseSimulation const& command);
   void Handle(ResetSimulation const& command);
   void Handle(RequestQuit const& command);
+  void Handle(SetBrush const& command);
+  void Handle(BrushPointer const& command);
+  void Handle(RunEditorAction const& command);
+  void Handle(ConfirmDiscard const& command);
+  void RefreshEditor();
+  void ResetEditor();
   void RefreshSimulationConfig();
   void SetError(std::string message);
 
@@ -47,6 +53,8 @@ class ApplicationController final : public ICommandSink {
   assets::IImageLoader const& image_loader_;
   assets::IProjectRepository const& project_repository_;
   simulation::ISimulationSession& simulation_;
+  LatticeBrushController brush_;
+  std::optional<domain::SimulationSettingsDraft> pending_draft_;
   std::vector<ApplicationCommand> commands_;
   ApplicationViewState view_state_;
   application::SceneState scene_state_;

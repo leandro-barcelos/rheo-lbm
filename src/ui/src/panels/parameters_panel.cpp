@@ -365,7 +365,7 @@ void ui::ParametersPanel::DisplayModals() {
     ImGui::PopStyleColor();
     ImGui::TextColored(
         {0.8784313725490196, 0.6588235294117647, 0.09803921568627451, 1},
-        "Left Click + Drag = Camera pan");
+        "Right / Middle / Space + Left = Camera pan");
 
     ImGui::PushStyleColor(
         ImGuiCol_Text,
@@ -374,7 +374,7 @@ void ui::ParametersPanel::DisplayModals() {
     ImGui::PopStyleColor();
     ImGui::TextColored(
         {0.8784313725490196, 0.6588235294117647, 0.09803921568627451, 1},
-        "Ctrl + Scroll = Zoom");
+        "Scroll = Zoom | Left = Edit | Ctrl+Z / Ctrl+Y = Undo / Redo");
 
     ImGui::EndPopup();
   }

@@ -1,6 +1,9 @@
+#include <unistd.h>
 #include <yaml-cpp/yaml.h>
 
+#include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <exception>
 #include <filesystem>
 #include <fstream>
@@ -36,6 +39,9 @@ std::expected<domain::ProjectDocument, assets::AssetError>
 assets::ProjectRepository::Load(std::string const& path) const {
   try {
     YAML::Node const root = YAML::LoadFile(path);
+    int version = root["version"] ? root["version"].as<int>() : 1;
+    if (version != 1 && version != 2)
+      throw std::runtime_error("Unsupported project version");
     YAML::Node const parameters = root["parameters"];
     if (!parameters || !parameters.IsMap()) {
       return std::unexpected(AssetError{"Project parameters are missing"});
@@ -73,6 +79,49 @@ assets::ProjectRepository::Load(std::string const& path) const {
         root["terrain_texture_path"]
             ? root["terrain_texture_path"].as<std::string>()
             : std::string{};
+    if (version == 2 && root["lattice_edits"]) {
+      auto node = root["lattice_edits"];
+      domain::LatticeEdits edits;
+      edits.dem_fingerprint = node["dem_sha256"].as<std::string>();
+      if (edits.dem_fingerprint.size() != 64 ||
+          edits.dem_fingerprint.find_first_not_of("0123456789abcdef") !=
+              std::string::npos)
+        throw std::runtime_error("Invalid DEM fingerprint");
+      auto shape = node["shape"];
+      if (!shape.IsSequence() || shape.size() != 3)
+        throw std::runtime_error("Invalid lattice shape");
+      auto& d = edits.definition;
+      d.width = shape[0].as<std::uint32_t>();
+      d.height = shape[1].as<std::uint32_t>();
+      d.depth = shape[2].as<std::uint32_t>();
+      std::uint64_t count = std::uint64_t(d.width) * d.height;
+      if (!d.width || !d.height || !d.depth || count > UINT32_MAX ||
+          count * d.depth > UINT32_MAX)
+        throw std::runtime_error("Invalid lattice size");
+      d.cell_count = count * d.depth;
+      d.meters_per_cell = node["meters_per_cell"].as<float>();
+      d.terrain_elevation_cells = node["terrain_elevation_cells"].as<float>();
+      if (!std::isfinite(d.meters_per_cell) || d.meters_per_cell <= 0 ||
+          !std::isfinite(d.terrain_elevation_cells) ||
+          d.terrain_elevation_cells < 0)
+        throw std::runtime_error("Invalid lattice scale");
+      auto runs = node["runs"];
+      if (!runs.IsSequence()) throw std::runtime_error("Invalid edit runs");
+      std::uint64_t end = 0;
+      for (auto run : runs) {
+        if (!run.IsSequence() || run.size() != 3)
+          throw std::runtime_error("Invalid edit run");
+        auto start = run[0].as<std::uint32_t>();
+        auto size = run[1].as<std::uint32_t>();
+        auto type = run[2].as<int>();
+        if (type < 0 || type > 4 || !size || start < end ||
+            std::uint64_t(start) + size > d.cell_count)
+          throw std::runtime_error("Invalid edit range or type");
+        end = std::uint64_t(start) + size;
+        edits.runs.push_back({start, size, static_cast<std::uint8_t>(type)});
+      }
+      document.edits = std::move(edits);
+    }
     return document;
   } catch (std::exception const& error) {
     return std::unexpected(AssetError{error.what()});
@@ -88,7 +137,7 @@ std::expected<void, assets::AssetError> assets::ProjectRepository::Save(
     }
 
     YAML::Node root;
-    root["version"] = 1;
+    root["version"] = 2;
     root["elevation_texture_path"] = document.terrain_path;
     root["terrain_texture_path"] = document.terrain_texture_path;
     YAML::Node parameters;
@@ -109,13 +158,39 @@ std::expected<void, assets::AssetError> assets::ProjectRepository::Save(
     parameters["upper_elevation_margin"] = draft.lattice.upper_elevation_margin;
     root["parameters"] = parameters;
 
-    std::ofstream output(path, std::ios::out | std::ios::trunc);
-    if (!output.is_open()) {
-      return std::unexpected(AssetError{"Could not open project for writing"});
+    if (document.edits) {
+      auto const& e = *document.edits;
+      auto const& d = e.definition;
+      YAML::Node node;
+      node["dem_sha256"] = e.dem_fingerprint;
+      for (auto size : {d.width, d.height, d.depth})
+        node["shape"].push_back(size);
+      node["meters_per_cell"] = d.meters_per_cell;
+      node["terrain_elevation_cells"] = d.terrain_elevation_cells;
+      node["runs"] = YAML::Node(YAML::NodeType::Sequence);
+      for (auto run : e.runs) {
+        YAML::Node r;
+        r.push_back(run.start);
+        r.push_back(run.count);
+        r.push_back(int(run.type));
+        node["runs"].push_back(r);
+      }
+      root["lattice_edits"] = node;
     }
-    output << root;
-    if (!output.good()) {
-      return std::unexpected(AssetError{"Could not write project"});
+    std::string temporary = path + ".tmp.XXXXXX";
+    int fd = mkstemp(temporary.data());
+    if (fd < 0) throw std::runtime_error("Could not create temporary project");
+    close(fd);
+    try {
+      std::ofstream output(temporary, std::ios::trunc);
+      output.exceptions(std::ios::failbit | std::ios::badbit);
+      output << root;
+      output.flush();
+      output.close();
+      std::filesystem::rename(temporary, path);
+    } catch (...) {
+      std::filesystem::remove(temporary);
+      throw;
     }
     return {};
   } catch (std::exception const& error) {

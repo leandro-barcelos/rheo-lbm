@@ -1,6 +1,7 @@
 #include "../lattice_types.slang"
 [[vk::binding(0, 0)]] StructuredBuffer<float> elevations;
 [[vk::binding(1, 0)]] RWStructuredBuffer<Cell> lattice;
+[[vk::binding(2, 0)]] RWStructuredBuffer<uint> cell_types;
 struct Parameters {
     uint4 shape;
     uint2 elevation_shape;
@@ -21,4 +22,5 @@ void voxelize_terrain(uint3 id : SV_DispatchThreadID) {
     cell.position = float4(float3(id), 0.0);
     cell.type = id.y <= highest ? TERRAIN_OBSTACLE_CELL : GAS_CELL;
     lattice[index] = cell;
+    cell_types[index] = uint(cell.type);
 }

@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "rheo/domain/elevation.h"
+#include "rheo/domain/lattice_editing.h"
 #include "rheo/events/input_event.h"
 #include "rheo/platform/window.h"
 
@@ -21,6 +22,7 @@ class Camera {
 
   explicit Camera(glm::vec3 position, platform::WindowSize initial_window_size);
 
+  domain::Ray ScreenRay(double x, double y) const;
   void HandleInput(events::InputEvent const& event);
 
   [[nodiscard]] glm::mat4 ViewMatrix() const;

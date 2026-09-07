@@ -4,6 +4,7 @@
 #include <string>
 #include <variant>
 
+#include "rheo/application/lattice_brush_controller.h"
 #include "rheo/domain/simulation_config.h"
 
 namespace application {
@@ -28,11 +29,21 @@ struct PlaySimulation {};
 struct PauseSimulation {};
 struct ResetSimulation {};
 struct RequestQuit {};
+struct SetBrush {
+  domain::BrushSettings settings;
+};
+struct RunEditorAction {
+  EditorAction action;
+};
+struct ConfirmDiscard {
+  bool confirm;
+};
 
 using ApplicationCommand =
     std::variant<UpdateSimulationDraft, ImportTerrain, SetTerrainTexture,
                  LoadProject, SaveProject, NewProject, PlaySimulation,
-                 PauseSimulation, ResetSimulation, RequestQuit>;
+                 PauseSimulation, ResetSimulation, RequestQuit, SetBrush,
+                 BrushPointer, RunEditorAction, ConfirmDiscard>;
 
 class ICommandSink {
  public:

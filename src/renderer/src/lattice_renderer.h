@@ -15,12 +15,16 @@ class LatticeRenderer {
   void Render(vk::raii::CommandBuffer const& command,
               graphics::SwapChain const& swap_chain,
               std::optional<simulation::LatticeRenderSnapshot> const& lattice,
-              Camera const& camera);
+              Camera const& camera, domain::BrushPreview const& preview);
 
  private:
+  struct Parameters {
+    glm::vec4 shape, center_radius, mode;
+  };
   struct alignas(16) CameraUBO {
     glm::mat4 model, view, proj;
   };
+  std::optional<CameraUBO> uploaded_camera_;
   graphics::Device const* device_ = nullptr;
   graphics::AllocatedBuffer camera_buffer_;
   vk::raii::DescriptorSetLayout descriptor_layout_ = nullptr;
@@ -28,6 +32,7 @@ class LatticeRenderer {
   vk::raii::DescriptorSet descriptor_ = nullptr;
   vk::raii::PipelineLayout pipeline_layout_ = nullptr;
   vk::raii::Pipeline pipeline_ = nullptr;
+  vk::raii::Pipeline preview_pipeline_ = nullptr;
   std::uint64_t loaded_signal_ = 0;
   std::uintptr_t loaded_buffer_ = 0;
 };

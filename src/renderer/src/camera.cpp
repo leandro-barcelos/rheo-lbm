@@ -64,10 +64,6 @@ void renderer::Camera::OnMouseButtonReleasedEvent(
 
 void renderer::Camera::OnMouseScrolledEvent(
     events::MouseScrolledEvent const& event) {
-  if (!is_control_pressed_) {
-    return;
-  }
-
   constexpr float kMinZoom = 5.0F;
   constexpr float kMaxZoom = 120.0F;
 
@@ -145,7 +141,7 @@ glm::mat4 renderer::Camera::ProjectionMatrix(float aspect_ratio,
   // points down on screen. Keep this sign so DEM north (+Z) is at the top
   // while east (+X) stays on the right.
   return glm::perspectiveRH_ZO(glm::radians(zoom_), aspect_ratio, near_plane,
-                              far_plane_);
+                               far_plane_);
 }
 
 void renderer::Camera::InitTopView(glm::vec3 const& bounds_min,
@@ -257,4 +253,9 @@ std::optional<glm::vec3> renderer::Camera::RaycastToPlane(double xpos,
   }
 
   return near_point + plane_depth * ray_dir;
+}
+
+domain::Ray renderer::Camera::ScreenRay(double x, double y) const {
+  auto near = ScreenToWorldPosition(x, y, 0);
+  return {near, glm::normalize(ScreenToWorldPosition(x, y, 1) - near)};
 }

@@ -33,6 +33,7 @@ class Window {
   [[nodiscard]] bool ShouldClose() const;
   void RequestClose();
   [[nodiscard]] WindowSize Size() const;
+  [[nodiscard]] WindowSize LogicalSize() const;
   [[nodiscard]] void* NativeHandle() const { return window_; }
   [[nodiscard]] events::InputQueue& InputEvents() const {
     return *input_queue_;

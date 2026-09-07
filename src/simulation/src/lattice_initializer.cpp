@@ -10,7 +10,8 @@ namespace simulation {
 graphics::AllocatedBuffer LatticeInitializer::Build(
     graphics::Device const& device, graphics::CommandPools const& pools,
     graphics::FrameSync& sync, domain::DemData const& dem,
-    domain::LatticeDefinition const& definition, std::uint64_t& ready_signal) {
+    domain::LatticeDefinition const& definition, std::uint64_t& ready_signal,
+    domain::CellTypes& types) {
   auto const limits = device.PhysicalDevice().getProperties().limits;
   auto const bytes =
       static_cast<vk::DeviceSize>(definition.cell_count) * sizeof(Cell);
@@ -45,7 +46,17 @@ graphics::AllocatedBuffer LatticeInitializer::Build(
       vk::BufferUsageFlagBits::eStorageBuffer |
           vk::BufferUsageFlagBits::eTransferSrc,
       vk::MemoryPropertyFlagBits::eDeviceLocal);
+  auto compact = graphics::BufferAllocator::CreateBuffer(
+      device, vk::DeviceSize(definition.cell_count) * 4,
+      vk::BufferUsageFlagBits::eStorageBuffer,
+      vk::MemoryPropertyFlagBits::eHostVisible |
+          vk::MemoryPropertyFlagBits::eHostCoherent);
   std::array bindings = {
+      vk::DescriptorSetLayoutBinding{
+          .binding = 2,
+          .descriptorType = vk::DescriptorType::eStorageBuffer,
+          .descriptorCount = 1,
+          .stageFlags = vk::ShaderStageFlagBits::eCompute},
       vk::DescriptorSetLayoutBinding{
           .binding = 0,
           .descriptorType = vk::DescriptorType::eStorageBuffer,
@@ -58,7 +69,7 @@ graphics::AllocatedBuffer LatticeInitializer::Build(
           .stageFlags = vk::ShaderStageFlagBits::eCompute}};
   vk::raii::DescriptorSetLayout layout(
       device.LogicalDevice(),
-      {.bindingCount = 2, .pBindings = bindings.data()});
+      {.bindingCount = 3, .pBindings = bindings.data()});
   struct Parameters {
     glm::uvec4 shape;
     glm::uvec2 elevation_shape;
@@ -82,7 +93,7 @@ graphics::AllocatedBuffer LatticeInitializer::Build(
       device, pipeline_layout, "shaders/compute/voxelize_terrain.spv",
       "voxelize_terrain");
   vk::DescriptorPoolSize pool_size{.type = vk::DescriptorType::eStorageBuffer,
-                                   .descriptorCount = 2};
+                                   .descriptorCount = 3};
   vk::raii::DescriptorPool pool(
       device.LogicalDevice(),
       {.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
@@ -97,6 +108,10 @@ graphics::AllocatedBuffer LatticeInitializer::Build(
                     .front());
   std::array infos = {
       vk::DescriptorBufferInfo{
+          .buffer = *compact.buffer,
+          .offset = 0,
+          .range = vk::DeviceSize(definition.cell_count) * 4},
+      vk::DescriptorBufferInfo{
           .buffer = *elevations.buffer, .offset = 0, .range = elevation_bytes},
       vk::DescriptorBufferInfo{
           .buffer = *lattice.buffer, .offset = 0, .range = bytes}};
@@ -105,13 +120,19 @@ graphics::AllocatedBuffer LatticeInitializer::Build(
                            .dstBinding = 0,
                            .descriptorCount = 1,
                            .descriptorType = vk::DescriptorType::eStorageBuffer,
-                           .pBufferInfo = &infos[0]},
+                           .pBufferInfo = &infos[1]},
                        vk::WriteDescriptorSet{
                            .dstSet = *descriptor,
                            .dstBinding = 1,
                            .descriptorCount = 1,
                            .descriptorType = vk::DescriptorType::eStorageBuffer,
-                           .pBufferInfo = &infos[1]}};
+                           .pBufferInfo = &infos[2]},
+                       vk::WriteDescriptorSet{
+                           .dstSet = *descriptor,
+                           .dstBinding = 2,
+                           .descriptorCount = 1,
+                           .descriptorType = vk::DescriptorType::eStorageBuffer,
+                           .pBufferInfo = &infos[0]}};
   device.LogicalDevice().updateDescriptorSets(writes, {});
   auto command = std::move(
       device.LogicalDevice()
@@ -126,6 +147,13 @@ graphics::AllocatedBuffer LatticeInitializer::Build(
   command.pushConstants<Parameters>(
       *pipeline_layout, vk::ShaderStageFlagBits::eCompute, 0, parameters);
   command.dispatch(groups[0], groups[1], groups[2]);
+  vk::MemoryBarrier2 host_barrier{
+      .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+      .srcAccessMask = vk::AccessFlagBits2::eShaderWrite,
+      .dstStageMask = vk::PipelineStageFlagBits2::eHost,
+      .dstAccessMask = vk::AccessFlagBits2::eHostRead};
+  command.pipelineBarrier2(
+      {.memoryBarrierCount = 1, .pMemoryBarriers = &host_barrier});
   command.end();
   // Submission makes coherent host writes visible. The timeline signal makes
   // compute writes visible to graphics (including a separate queue family).
@@ -139,6 +167,10 @@ graphics::AllocatedBuffer LatticeInitializer::Build(
                         .pSignalSemaphores = &*sync.Semaphore()};
   device.ComputeQueue().submit(submit, nullptr);
   sync.WaitSemaphore(device, ready_signal);
+  auto* result = static_cast<std::uint32_t*>(
+      compact.memory.mapMemory(0, vk::DeviceSize(definition.cell_count) * 4));
+  types.assign(result, result + definition.cell_count);
+  compact.memory.unmapMemory();
   return lattice;
 }
 }  // namespace simulation

@@ -2,6 +2,7 @@
 #define RHEO_EXECUTABLE_RHEO_LBM_APP_H
 
 #include "rheo/application/application_controller.h"
+#include "rheo/application/editor_input_router.h"
 #include "rheo/assets/asset_services.h"
 #include "rheo/events/input_queue.h"
 #include "rheo/graphics/command_pool.h"
@@ -50,7 +51,7 @@ class RheoLBMApp {
   ui::UserInterface ui_;
   double last_time_ = 0.0;
   double delta_time_ = 0.0;
-  bool alt_pressed_ = false;
+  application::EditorInputRouter editor_input_;
 };
 
 }  // namespace rheo

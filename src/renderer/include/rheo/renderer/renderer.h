@@ -32,6 +32,9 @@ class Renderer {
                    graphics::FrameSync& frame_sync,
                    application::SceneState const& scene,
                    platform::Window const& window, IOverlayPass& overlay);
+  void PrepareCamera(application::SceneState const& scene,
+                     platform::WindowSize size);
+  domain::Ray ScreenPointToRay(double x, double y) const;
   void HandleInput(events::InputEvent const& event);
   void RequestResize();
   void Shutdown();

@@ -20,15 +20,21 @@ struct ApplicationViewState {
   std::string project_path;
   std::optional<std::string> last_error;
   std::vector<std::string> validation_errors;
+  domain::BrushPreview editor;
+  bool has_edits = false, can_undo = false, can_redo = false,
+       confirm_discard = false;
+  int max_elevation = 0;
+  float meters_per_cell = 0, min_elevation = 0, terrain_elevation_cells = 1;
   bool can_play = false;
   bool simulation_running = false;
   bool terrain_loaded = false;
-} __attribute__((packed));
+};
 
 struct SceneState {
   domain::SharedDem dem;
   domain::SharedImage terrain_texture;
   std::optional<simulation::LatticeRenderSnapshot> lattice;
+  domain::BrushPreview preview;
   std::uint64_t revision = 0;
 } __attribute__((aligned(128)));
 

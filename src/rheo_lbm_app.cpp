@@ -1,5 +1,6 @@
 #include "rheo_lbm_app.h"
 
+#include <algorithm>
 #include <variant>
 
 #include "rheo/events/input_event.h"
@@ -41,6 +42,8 @@ void rheo::RheoLBMApp::MainLoop() {
     ui_.BeginFrame();
     ui_.Draw(application_.ViewState(), application_);
     ui_.EndFrame();
+    application_.ProcessPendingCommands();
+    renderer_.PrepareCamera(application_.SceneState(), window_.Size());
     RouteInput(ui_.InputCapture());
 
     application_.ProcessPendingCommands();
@@ -54,36 +57,17 @@ void rheo::RheoLBMApp::MainLoop() {
 }
 
 void rheo::RheoLBMApp::RouteInput(ui::InputCaptureState capture) {
-  for (auto const& event : input_queue_.Drain()) {
-    if (auto const* resized = std::get_if<events::WindowResizedEvent>(&event)) {
-      if (resized->width > 0 && resized->height > 0) {
-        renderer_.RequestResize();
-        renderer_.HandleInput(event);
-      }
-      continue;
-    }
-
-    if (auto const* pressed = std::get_if<events::KeyPressedEvent>(&event)) {
-      if (pressed->key == events::kLeftAlt ||
-          pressed->key == events::kRightAlt) {
-        alt_pressed_ = true;
-      } else if (pressed->key == events::kF4 && alt_pressed_) {
-        application_.Submit(application::RequestQuit{});
-      }
-    } else if (auto const* released =
-                   std::get_if<events::KeyReleasedEvent>(&event)) {
-      if (released->key == events::kLeftAlt ||
-          released->key == events::kRightAlt) {
-        alt_pressed_ = false;
-      }
-    }
-
-    if ((events::IsKeyboardEvent(event) && capture.keyboard) ||
-        (events::IsMouseEvent(event) && capture.mouse)) {
-      continue;
-    }
-    renderer_.HandleInput(event);
-  }
+  auto logical = window_.LogicalSize(), pixels = window_.Size();
+  auto events = input_queue_.Drain();
+  editor_input_.Route(
+      events, {capture.mouse, capture.keyboard},
+      {logical.width, logical.height}, {pixels.width, pixels.height},
+      application_,
+      {[this](double x, double y) { return renderer_.ScreenPointToRay(x, y); },
+       [this](events::InputEvent const& event) {
+         renderer_.HandleInput(event);
+       },
+       [this] { renderer_.RequestResize(); }});
 }
 
 void rheo::RheoLBMApp::UpdateDeltaTime() {

@@ -5,17 +5,12 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 
+#include "rheo/domain/lattice_editing.h"
 #include "rheo/graphics/buffer_view.h"
 
 namespace simulation {
 
-enum class CellType : std::int32_t {  // NOLINT
-  kFluid,
-  kInterface,
-  kGas,
-  kObstacleTerrain,
-  kObstacleDam
-};
+using domain::CellType;
 
 struct Cell {  // NOLINT
   glm::vec4 position;

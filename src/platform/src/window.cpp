@@ -72,11 +72,15 @@ platform::Window::Window(WindowProperties properties,
   window_ = native_window;
   glfwSetWindowUserPointer(native_window, this);
 
-  glfwSetWindowSizeCallback(native_window,
-                            [](GLFWwindow* handle, int width, int height) {
-                              Owner(handle)->InputEvents().Push(
-                                  events::WindowResizedEvent{width, height});
-                            });
+  glfwSetWindowFocusCallback(native_window, [](GLFWwindow* handle,
+                                               int focused) {
+    Owner(handle)->InputEvents().Push(events::WindowFocusEvent{focused != 0});
+  });
+  glfwSetFramebufferSizeCallback(
+      native_window, [](GLFWwindow* handle, int width, int height) {
+        Owner(handle)->InputEvents().Push(
+            events::WindowResizedEvent{width, height});
+      });
   glfwSetKeyCallback(native_window, [](GLFWwindow* handle, int key, int,
                                        int action, int) {
     auto& queue = Owner(handle)->InputEvents();
@@ -147,4 +151,10 @@ void platform::Window::ErrorCallback(int error, const char* description) {
                    "[ERROR] Platform: [{}] {}", error,
                    description != nullptr ? description : "<no description>")
             << '\n';
+}
+
+platform::WindowSize platform::Window::LogicalSize() const {
+  WindowSize s;
+  glfwGetWindowSize(static_cast<GLFWwindow*>(window_), &s.width, &s.height);
+  return s;
 }

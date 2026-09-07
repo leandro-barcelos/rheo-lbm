@@ -40,10 +40,15 @@ struct WindowResizedEvent {
   int height = 0;
 };
 
+struct WindowFocusEvent {
+  bool focused = true;
+};
+
 using InputEvent =
     std::variant<KeyPressedEvent, KeyReleasedEvent, MouseMovedEvent,
                  MouseScrolledEvent, MouseButtonPressedEvent,
-                 MouseButtonReleasedEvent, WindowResizedEvent>;
+                 MouseButtonReleasedEvent, WindowResizedEvent,
+                 WindowFocusEvent>;
 
 [[nodiscard]] inline bool IsKeyboardEvent(InputEvent const& event) {
   return std::holds_alternative<KeyPressedEvent>(event) ||

@@ -31,6 +31,22 @@ class Renderer::Impl {
         device.LogicalDevice().allocateCommandBuffers(allocation).front());
   }
 
+  void PrepareCamera(application::SceneState const& scene,
+                     platform::WindowSize size) {
+    camera_.OnWindowResizedEvent({size.width, size.height});
+    if (scene.lattice) {
+      auto const& l = *scene.lattice;
+      glm::vec3 shape{l.lattice_width, l.lattice_height, l.lattice_depth};
+      if (scene.dem == framed_dem_ && shape == framed_shape_) return;
+      framed_shape_ = shape;
+      glm::vec3 half = 0.5F * shape / std::max({shape.x, shape.y, shape.z});
+      camera_.InitTopView(-half, half);
+      framed_dem_ = scene.dem;
+    }
+  }
+  domain::Ray ScreenRay(double x, double y) const {
+    return camera_.ScreenRay(x, y);
+  }
   void HandleInput(events::InputEvent const& event) {
     camera_.HandleInput(event);
   }
@@ -52,13 +68,7 @@ class Renderer::Impl {
       return;
     }
 
-    if (scene.dem != framed_dem_ && scene.lattice) {
-      auto const& l = *scene.lattice;
-      glm::vec3 shape{l.lattice_width, l.lattice_height, l.lattice_depth};
-      glm::vec3 half = 0.5F * shape / std::max({shape.x, shape.y, shape.z});
-      camera_.InitTopView(-half, half);
-      framed_dem_ = scene.dem;
-    }
+    PrepareCamera(scene, window.Size());
     auto const simulation_signal =
         scene.lattice && scene.lattice->ready_signal > 0
             ? std::optional<std::uint64_t>(scene.lattice->ready_signal)
@@ -123,7 +133,7 @@ class Renderer::Impl {
                                 .pDepthAttachment = &depth_attachment};
     command_buffer_.beginRendering(rendering);
     lattice_renderer_.Render(command_buffer_, swap_chain, scene.lattice,
-                             camera_);
+                             camera_, scene.preview);
     command_buffer_.endRendering();
     // Overlay uses its existing color-only pipeline in a separate rendering
     // scope.
@@ -282,6 +292,7 @@ class Renderer::Impl {
   vk::Format depth_format_ = vk::Format::eUndefined;
   bool depth_initialized_ = false;
   domain::SharedDem framed_dem_;
+  glm::vec3 framed_shape_{};
   vk::raii::CommandBuffer command_buffer_ = nullptr;
   LatticeRenderer lattice_renderer_;
   Camera camera_;
@@ -314,3 +325,11 @@ void Renderer::RequestResize() { impl_->RequestResize(); }
 void Renderer::Shutdown() { impl_->Shutdown(); }
 
 }  // namespace renderer
+
+void renderer::Renderer::PrepareCamera(application::SceneState const& scene,
+                                       platform::WindowSize size) {
+  impl_->PrepareCamera(scene, size);
+}
+domain::Ray renderer::Renderer::ScreenPointToRay(double x, double y) const {
+  return impl_->ScreenRay(x, y);
+}

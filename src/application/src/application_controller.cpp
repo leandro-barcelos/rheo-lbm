@@ -28,7 +28,8 @@ application::ApplicationController::ApplicationController(
     : dem_loader_(dem_loader),
       image_loader_(image_loader),
       project_repository_(project_repository),
-      simulation_(simulation) {}
+      simulation_(simulation),
+      brush_(simulation) {}
 
 void application::ApplicationController::Submit(ApplicationCommand command) {
   commands_.push_back(std::move(command));
@@ -45,6 +46,7 @@ void application::ApplicationController::ProcessPendingCommands() {
 void application::ApplicationController::Update(double delta_ms) {
   scene_state_.lattice = simulation_.Update(delta_ms);
   view_state_.simulation_running = simulation_.IsRunning();
+  RefreshEditor();
 }
 
 void application::ApplicationController::Handle(
@@ -56,12 +58,19 @@ void application::ApplicationController::Handle(
   }
   if (scene_state_.dem &&
       command.draft.lattice != view_state_.simulation.lattice) {
+    brush_.Finish();
+    if (simulation_.Editing().changed) {
+      pending_draft_ = command.draft;
+      view_state_.confirm_discard = true;
+      return;
+    }
     auto initialized =
         simulation_.InitializeTerrain(scene_state_.dem, command.draft.lattice);
     if (!initialized) {
       SetError(initialized.error());
       return;
     }
+    brush_.Reset(command.draft.lattice.height_subdivisions);
     scene_state_.lattice = simulation_.Update(0);
     ++scene_state_.revision;
   }
@@ -71,6 +80,7 @@ void application::ApplicationController::Handle(
 }
 
 void application::ApplicationController::Handle(ImportTerrain const& command) {
+  brush_.Finish();
   auto terrain = dem_loader_.Load(command.path);
   if (!terrain) {
     SetError(terrain.error().message);
@@ -89,6 +99,7 @@ void application::ApplicationController::Handle(ImportTerrain const& command) {
   view_state_.terrain_path = command.path;
   view_state_.terrain_loaded = true;
   view_state_.simulation_running = false;
+  ResetEditor();
   view_state_.last_error.reset();
   RefreshSimulationConfig();
 }
@@ -115,6 +126,7 @@ void application::ApplicationController::Handle(
 }
 
 void application::ApplicationController::Handle(LoadProject const& command) {
+  brush_.Finish();
   std::string const path = EnsureProjectExtension(command.path);
   auto document = project_repository_.Load(path);
   if (!document) {
@@ -133,8 +145,8 @@ void application::ApplicationController::Handle(LoadProject const& command) {
     return;
   }
 
-  auto initialized =
-      simulation_.InitializeTerrain(*terrain, document->simulation.lattice);
+  auto initialized = simulation_.InitializeTerrain(
+      *terrain, document->simulation.lattice, document->edits);
   if (!initialized) {
     SetError(initialized.error());
     return;
@@ -145,6 +157,7 @@ void application::ApplicationController::Handle(LoadProject const& command) {
   view_state_.project_path = path;
   view_state_.terrain_loaded = true;
   view_state_.simulation_running = false;
+  ResetEditor();
   view_state_.last_error.reset();
   scene_state_.dem = std::move(*terrain);
   scene_state_.terrain_texture.reset();
@@ -159,8 +172,10 @@ void application::ApplicationController::Handle(SaveProject const& command) {
     SetError("Project path is empty");
     return;
   }
+  brush_.Finish();
   domain::ProjectDocument document{
       .simulation = view_state_.simulation,
+      .edits = simulation_.ExportEdits(),
       .terrain_path = view_state_.terrain_path,
       .terrain_texture_path = view_state_.terrain_texture_path,
   };
@@ -174,9 +189,11 @@ void application::ApplicationController::Handle(SaveProject const& command) {
 }
 
 void application::ApplicationController::Handle(NewProject const&) {
+  brush_.Finish();
   simulation_.Clear();
   view_state_ = {};
   scene_state_ = {.revision = scene_state_.revision + 1U};
+  ResetEditor();
 }
 
 void application::ApplicationController::Handle(PlaySimulation const&) {
@@ -194,14 +211,16 @@ void application::ApplicationController::Handle(ResetSimulation const&) {
     SetError("Import a DEM first");
     return;
   }
-  auto result = simulation_.InitializeTerrain(scene_state_.dem,
-                                              view_state_.simulation.lattice);
+  brush_.Finish();
+  auto result =
+      simulation_.Edit({.kind = simulation::EditOperation::Kind::kRestore});
   if (!result) {
     SetError(result.error());
     return;
   }
   scene_state_.lattice = simulation_.Update(0);
   ++scene_state_.revision;
+  ResetEditor();
   view_state_.last_error.reset();
 }
 
@@ -221,4 +240,62 @@ void application::ApplicationController::RefreshSimulationConfig() {
 
 void application::ApplicationController::SetError(std::string message) {
   view_state_.last_error = std::move(message);
+}
+
+void application::ApplicationController::RefreshEditor() {
+  auto state = simulation_.Editing();
+  view_state_.editor = brush_.Preview();
+  scene_state_.preview = brush_.Preview();
+  view_state_.has_edits = state.changed;
+  view_state_.can_undo = state.can_undo;
+  view_state_.can_redo = state.can_redo;
+  view_state_.min_elevation = state.min_elevation;
+  if (state.definition) {
+    view_state_.max_elevation = state.definition->height - 1;
+    view_state_.meters_per_cell = state.definition->meters_per_cell;
+    view_state_.terrain_elevation_cells =
+        state.definition->terrain_elevation_cells;
+  }
+}
+void application::ApplicationController::ResetEditor() {
+  brush_.Reset(view_state_.simulation.lattice.height_subdivisions);
+  pending_draft_.reset();
+  view_state_.confirm_discard = false;
+  RefreshEditor();
+}
+void application::ApplicationController::Handle(SetBrush const& c) {
+  brush_.Settings(c.settings);
+  RefreshEditor();
+}
+void application::ApplicationController::Handle(BrushPointer const& c) {
+  auto pointer = c;
+  pointer.blocked |= pending_draft_.has_value();
+  auto result = brush_.Pointer(pointer);
+  if (!result) SetError(result.error());
+  RefreshEditor();
+}
+void application::ApplicationController::Handle(RunEditorAction const& c) {
+  auto result = brush_.Action(c.action);
+  if (!result) SetError(result.error());
+  RefreshEditor();
+}
+void application::ApplicationController::Handle(ConfirmDiscard const& c) {
+  if (!pending_draft_) return;
+  if (!c.confirm) {
+    pending_draft_.reset();
+    view_state_.confirm_discard = false;
+    return;
+  }
+  auto draft = *pending_draft_;
+  auto result = simulation_.InitializeTerrain(scene_state_.dem, draft.lattice);
+  if (!result) {
+    SetError(result.error());
+    return;
+  }
+  view_state_.simulation = draft;
+  ResetEditor();
+  scene_state_.lattice = simulation_.Update(0);
+  ++scene_state_.revision;
+  view_state_.last_error.reset();
+  RefreshSimulationConfig();
 }

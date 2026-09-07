@@ -15,6 +15,7 @@ find_package(glm CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
 find_package(yaml-cpp CONFIG REQUIRED)
 find_package(GDAL CONFIG REQUIRED)
+find_package(OpenSSL REQUIRED COMPONENTS Crypto)
 
 add_library(rheo_graphics_backend INTERFACE)
 target_link_libraries(rheo_graphics_backend INTERFACE Vulkan::Vulkan)
@@ -122,3 +123,16 @@ compile_slang_shaders(lattice_render_shader "shaders/graphics/lattice.slang" "${
     -entry vert_main -entry frag_main
 )
 add_dependencies(${PROJECT_NAME} voxelize_terrain_shader lattice_render_shader)
+
+compile_slang_shaders(
+    lattice_edit_shader
+    "shaders/compute/lattice_editor.slang"
+    "${SHADERS_DIR}/compute"
+    "${SHADERS_DIR}/compute/lattice_editor.spv"
+    -entry edit_cells
+)
+add_dependencies(rheo-lbm lattice_edit_shader)
+if(TARGET lattice_gpu_test)
+  add_dependencies(lattice_gpu_test lattice_edit_shader)
+  add_dependencies(terrain_render_smoke lattice_edit_shader)
+endif()

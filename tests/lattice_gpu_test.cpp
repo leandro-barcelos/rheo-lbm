@@ -135,6 +135,109 @@ int main() {
                     z * flat.lattice_width * flat.lattice_height]
                   .type == (y == 0 ? simulation::CellType::kObstacleTerrain
                                    : simulation::CellType::kGas));
+  // Start a basin with a compact, GPU-produced baseline.
+  auto basin = std::make_shared<domain::DemData>();
+  basin->width = 7;
+  basin->height = 7;
+  basin->pixel_size_meters = {1, 1};
+  basin->min_elevation = 0;
+  basin->max_elevation = 4;
+  for (int z = 0; z < 7; ++z)
+    for (int x = 0; x < 7; ++x)
+      basin->samples.push_back(
+          {.coordinate = {x, z},
+           .elevation = (x == 0 || z == 0 || x == 6 || z == 6) ? 4.0F : 0.0F});
+  domain::LatticeSettings settings{.height_subdivisions = 4,
+                                   .upper_elevation_margin = 2};
+  Check(session.InitializeTerrain(basin, settings).has_value());
+  domain::CellTypes baseline(session.Editing().types.begin(),
+                             session.Editing().types.end());
+  auto verify = [&] {
+    auto data = Read(device, pools, sync, *session.Update(0));
+    auto state = session.Editing();
+    for (unsigned i = 0; i < data.size(); ++i) {
+      auto const& c = data[i];
+      Check(int(c.type) == state.types[i]);
+      bool liquid = c.type == domain::CellType::kFluid ||
+                    c.type == domain::CellType::kInterface;
+      Check(c.velocity == glm::vec4(0) && c.density == (liquid ? 1.0F : 0.0F) &&
+            c.pressure == (liquid ? 1.0F / 3 : 0.0F));
+      Check(c.mass == (c.type == domain::CellType::kFluid       ? 1.0F
+                       : c.type == domain::CellType::kInterface ? .5F
+                                                                : 0.0F));
+      Check(glm::ivec3(c.position) ==
+            domain::CellPosition(i, *state.definition));
+    }
+  };
+  verify();
+  session.BeginStroke();
+  Check(session
+            .Edit({.center = {3, 1, 3},
+                   .brush = {.mode = domain::BrushMode::kWater}})
+            .has_value());
+  session.EndStroke();
+  verify();
+  Check(session.Editing().can_undo && session.Editing().changed);
+  auto water = session.ExportEdits();
+  Check(water && !water->runs.empty());
+  Check(session.Edit({.kind = simulation::EditOperation::Kind::kUndo})
+            .has_value());
+  verify();
+  Check(!session.Editing().changed && session.Editing().can_redo);
+  Check(session.Edit({.kind = simulation::EditOperation::Kind::kRedo})
+            .has_value());
+  verify();
+  auto before_signal = session.Update(0)->ready_signal;
+  session.BeginStroke();
+  Check(session
+            .Edit({.center = {3, 0, 3},
+                   .brush = {.mode = domain::BrushMode::kErase}})
+            .has_value());
+  session.EndStroke();
+  Check(session.Update(0)->ready_signal == before_signal);
+  session.BeginStroke();
+  Check(session
+            .Edit({.center = {2, 1, 2},
+                   .brush = {.mode = domain::BrushMode::kElevation,
+                             .radius = 1,
+                             .elevation = 2}})
+            .has_value());
+  Check(session
+            .Edit({.center = {3, 1, 2},
+                   .brush = {.mode = domain::BrushMode::kElevation,
+                             .radius = 1,
+                             .elevation = 3}})
+            .has_value());
+  session.EndStroke();
+  verify();
+  auto final = session.ExportEdits();
+  Check(session.Edit({.kind = simulation::EditOperation::Kind::kRestore})
+            .has_value());
+  verify();
+  Check(!session.Editing().can_undo && !session.Editing().changed);
+  Check(session.InitializeTerrain(basin, settings, final).has_value());
+  verify();
+  Check(session.ExportEdits()->runs == final->runs &&
+        !session.Editing().can_undo);
+  auto previous = *session.Update(0);
+  auto invalid = *final;
+  invalid.dem_fingerprint = "wrong";
+  Check(!session.InitializeTerrain(basin, settings, invalid));
+  Check(session.Update(0)->lattice_buffer.native_handle ==
+        previous.lattice_buffer.native_handle);
+  verify();
+  auto changed_dem = std::make_shared<domain::DemData>(*basin);
+  changed_dem->samples[8].elevation = .1F;
+  Check(!session.InitializeTerrain(changed_dem, settings, final));
+  Check(session.Update(0)->lattice_buffer.native_handle ==
+        previous.lattice_buffer.native_handle);
+  verify();
+  invalid = *final;
+  invalid.runs = {{0, 1, domain::Type(domain::CellType::kGas)}};
+  Check(!session.InitializeTerrain(basin, settings, invalid));
+  Check(session.Update(0)->lattice_buffer.native_handle ==
+        previous.lattice_buffer.native_handle);
+  verify();
   session.Clear();
   Check(!session.IsReady() && !session.Update(0));
   std::cout << "GPU lattice readback passed on "

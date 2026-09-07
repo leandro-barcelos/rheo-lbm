@@ -1,6 +1,7 @@
 {
   "dependencies": [
     "gdal",
+    "openssl",
     "glfw3",
     "glm",
     "shader-slang",
