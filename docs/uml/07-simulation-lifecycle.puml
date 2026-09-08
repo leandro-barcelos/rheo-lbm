@@ -7,40 +7,35 @@ skinparam shadowing false
 [*] --> Empty
 
 state Empty : sem configuração
-state Configured : configuração validada pendente
-state Prepared : simulador GPU criado e parado
+state Editing : lattice disponível para edição
 state Running : simulador GPU executando
 state Paused : simulador preservado e parado
 
-Empty --> Configured : ApplyConfig(config)
-Configured --> Running : Play() / cria FluidSimulator
-Configured --> Prepared : Reset() / cria FluidSimulator
-
-Prepared --> Running : Play()
+Empty --> Editing : InitializeTerrain()
+Editing --> Running : Play(settings) / cria LbmSolver
 Running --> Paused : Pause()
-Paused --> Running : Play()
-Running --> Prepared : Reset() / recria
-Paused --> Prepared : Reset() / recria
+Paused --> Running : Play(settings)
+Running --> Editing : ResetToTerrain()
+Paused --> Editing : ResetToTerrain()
 
-Running --> Running : Update(delta_ms)\nproduz FluidRenderSnapshot
+Running --> Running : Update(delta_ms)\nproduz LatticeRenderSnapshot
+Running --> Running : RemoveDam()\nremove barragem e reclassifica interfaces
 Paused --> Paused : Update()\nretorna último snapshot
-Prepared --> Prepared : Update()\nretorna snapshot inicial
+Editing --> Editing : Update()\nretorna lattice editável
 
-Running --> Configured : ApplyConfig(config)\ndescarta recursos anteriores
-Paused --> Configured : ApplyConfig(config)\ndescarta recursos anteriores
-Prepared --> Configured : ApplyConfig(config)\ndescarta recursos anteriores
-Configured --> Configured : ApplyConfig(config)
+Running --> Editing : InitializeTerrain()\ndescarta recursos anteriores
+Paused --> Editing : InitializeTerrain()\ndescarta recursos anteriores
+Editing --> Editing : InitializeTerrain()
 
 Empty --> Empty : Clear()
-Configured --> Empty : Clear()
-Prepared --> Empty : Clear()
+Editing --> Empty : Clear()
 Running --> Empty : Clear()
 Paused --> Empty : Clear()
 
 Empty --> [*]
 
-note right of Configured
-  FluidSimulator é privado ao módulo.
+note right of Editing
+  LbmSolver é privado ao módulo.
   O renderer observa somente snapshots.
 end note
 

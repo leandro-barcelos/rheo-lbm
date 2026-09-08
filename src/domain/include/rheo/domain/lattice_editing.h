@@ -16,10 +16,15 @@ enum class CellType : std::int32_t {
   kInterface = 1,
   kGas = 2,
   kObstacleTerrain = 3,
-  kObstacleDam = 4
+  kObstacleDam = 4,
+  kInterfaceToFluid = 5,
+  kInterfaceToGas = 6
 };
 using CellTypes = std::vector<std::uint8_t>;
 constexpr std::uint8_t Type(CellType t) { return static_cast<std::uint8_t>(t); }
+constexpr bool IsPersistentCellType(std::uint8_t type) {
+  return type <= Type(CellType::kObstacleDam);
+}
 struct Ray {
   glm::vec3 origin{}, direction{};
 };

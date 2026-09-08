@@ -23,10 +23,13 @@ struct Cell {  // NOLINT
 
 struct LatticeRenderSnapshot {
   graphics::GraphicsBufferView lattice_buffer;
+  // Current D3Q19 population buffer. Empty while editing.
+  graphics::GraphicsBufferView momentum_buffer;
   std::uint32_t lattice_width = 0;
   std::uint32_t lattice_height = 0;
   std::uint32_t lattice_depth = 0;
   std::uint32_t cell_count = 0;
+  std::uint32_t momentum_count = 0;
   float terrain_elevation_cells = 0.0F;
   std::uint64_t ready_signal = 0;
 } __attribute__((aligned(32)));

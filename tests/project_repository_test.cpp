@@ -1,6 +1,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <source_location>
 #include <stdexcept>
 #include <string>
 
@@ -8,9 +9,11 @@
 
 namespace {
 
-void Check(bool condition) {
+void Check(bool condition,
+           std::source_location location = std::source_location::current()) {
   if (!condition) {
-    throw std::runtime_error("test check failed");
+    throw std::runtime_error("test check failed at line " +
+                             std::to_string(location.line()));
   }
 }
 
@@ -47,23 +50,37 @@ int main() {
   Check(loaded.has_value());
   Check(loaded->terrain_path == "terrain.tif");
   Check(loaded->terrain_texture_path == "colors.png");
-  Check(loaded->simulation.voxel_max_particles == 16);
-  Check(loaded->simulation.dem_resolution == 5.0F);
+  Check(loaded->simulation.lbm == domain::LbmSettings{});
 
   Check(loaded->simulation.lattice.height_subdivisions == 13);
   Check(loaded->simulation.lattice.upper_elevation_margin == 0);
   loaded->simulation.lattice = {.height_subdivisions = 27,
                                 .upper_elevation_margin = 12.5F};
+  loaded->simulation.lbm = {.steps_per_second = 30,
+                            .initial_density = 1.1F,
+                            .omega = 1.4F,
+                            .atmospheric_density = 0.95F,
+                            .max_velocity = 0.2F,
+                            .fill_offset = 0.004F,
+                            .lonely_threshold = 0.2F,
+                            .gravity = {0.01F, -0.006F, 0.02F}};
   auto const saved_path = directory / "round-trip.yaml";
   auto saved = repository.Save(saved_path.string(), *loaded);
   Check(saved.has_value());
   auto round_trip = repository.Load(saved_path.string());
   Check(round_trip.has_value());
   Check(round_trip->terrain_path == loaded->terrain_path);
-  Check(round_trip->simulation.yield_stress == loaded->simulation.yield_stress);
+  Check(round_trip->simulation.lbm == loaded->simulation.lbm);
 
   Check(round_trip->simulation.lattice == loaded->simulation.lattice);
   Check(round_trip->terrain_texture_path == "colors.png");
+  {
+    std::ifstream saved_file(saved_path);
+    std::string yaml((std::istreambuf_iterator<char>(saved_file)), {});
+    Check(yaml.find("version: 3") != std::string::npos);
+    Check(yaml.find("viscosity") == std::string::npos);
+    Check(yaml.find("gravity") != std::string::npos);
+  }
   {
     std::ofstream output(legacy_path);
     output << "parameters:\n  height_subdivisions: 0\n";
@@ -90,11 +107,18 @@ int main() {
     return repository.Load(legacy_path.string()).has_value();
   };
   Check(!valid("[[3, 1, 256]]"));
+  Check(!valid("[[3, 1, 5]]"));
+  Check(!valid("[[3, 1, 6]]"));
   Check(!valid("[[3, 2, 4], [4, 1, 3]]"));
   Check(!valid("[[35, 2, 3]]"));
   Check(!valid("[[3, 0, 3]]"));
   Check(!valid("[[3, 1, -1]]"));
   Check(!valid("[[3, -1, 3]]"));
+  {
+    std::ofstream out(legacy_path);
+    out << "version: 3\nparameters:\n  omega: 2\n";
+  }
+  Check(!repository.Load(legacy_path.string()));
   {
     std::ofstream out(legacy_path);
     out << "version: 2\nparameters: {}\nlattice_edits:\n  dem_sha256: "

@@ -41,7 +41,7 @@ Simulation --> Domain
 Simulation --> Graphics
 
 Renderer --> Application : SceneState
-Renderer --> Simulation : FluidRenderSnapshot
+Renderer --> Simulation : LatticeRenderSnapshot
 Renderer --> Graphics
 Renderer --> Platform
 Renderer --> Events

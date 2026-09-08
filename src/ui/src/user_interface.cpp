@@ -26,6 +26,7 @@ class UserInterface::Impl {
     parameters_.SetDEMTexturePath(state.terrain_path);
     parameters_.SetVisualizationTexturePath(state.terrain_texture_path);
     parameters_.SetSimulationConfigPath(state.project_path);
+    parameters_.SetLocked(!state.can_edit);
 
     bool const draft_changed = parameters_.Draw();
     auto const events = parameters_.GetEvents();
@@ -54,21 +55,24 @@ class UserInterface::Impl {
       commands.Submit(application::RequestQuit{});
     }
 
-    auto const controls = control_.Draw(state.simulation_running,
-                                        state.can_play, state.terrain_loaded);
+    auto const controls = control_.Draw(
+        state.simulation_running, state.simulation_paused, state.can_play,
+        state.terrain_loaded, state.can_remove_dam, state.physical_step_count);
     if (controls.play_pressed) {
       commands.Submit(application::PlaySimulation{});
     } else if (controls.pause_pressed) {
       commands.Submit(application::PauseSimulation{});
     } else if (controls.reset_pressed) {
       commands.Submit(application::ResetSimulation{});
+    } else if (controls.remove_dam_pressed) {
+      commands.Submit(application::RemoveDam{});
     }
 
     ImGui::SetNextWindowPos(ImVec2(12, 340), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(340, 0), ImGuiCond_FirstUseEver);
     if (ImGui::Begin("Lattice editor", nullptr,
                      ImGuiWindowFlags_AlwaysAutoResize)) {
-      ImGui::BeginDisabled(!state.terrain_loaded);
+      ImGui::BeginDisabled(!state.can_edit);
       auto brush = state.editor.settings;
       int mode = int(brush.mode);
       char const* names[] = {"Erase",      "Terrain", "Elevation",

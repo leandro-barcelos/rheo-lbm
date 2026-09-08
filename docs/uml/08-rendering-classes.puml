@@ -39,37 +39,33 @@ package graphics {
 package simulation {
   class SimulationSession
   class "SimulationSession::Impl" as SimulationImpl <<private>>
-  class FluidSimulator <<private>>
-  class FluidRenderSnapshot <<public contract>>
-  class FluidParticle <<shader ABI>>
+  class LbmSolver <<private>>
+  class LatticeRenderSnapshot <<public contract>>
+  class Cell <<shader ABI>>
 
   SimulationSession *-- SimulationImpl
-  SimulationImpl *-- "0..1" FluidSimulator
-  SimulationImpl --> FluidRenderSnapshot : produz
-  FluidSimulator *-- "1..*" AllocatedBuffer
-  FluidSimulator ..> FluidParticle
-  FluidRenderSnapshot o-- GraphicsBufferView
+  SimulationImpl *-- "0..1" LbmSolver
+  SimulationImpl --> LatticeRenderSnapshot : produz
+  LbmSolver *-- "1..*" AllocatedBuffer
+  LbmSolver ..> Cell
+  LatticeRenderSnapshot o-- GraphicsBufferView
 }
 
 package renderer {
   class Renderer
   class "Renderer::Impl" as RendererImpl <<private>>
   class Camera <<private>>
-  class FluidRenderer <<private>>
-  class TerrainRenderer <<private>>
+  class LatticeRenderer <<private>>
   interface IOverlayPass
 
   Renderer *-- RendererImpl
   RendererImpl *-- Camera
-  RendererImpl *-- FluidRenderer
-  RendererImpl *-- TerrainRenderer
+  RendererImpl *-- LatticeRenderer
   RendererImpl --> SwapChain
   RendererImpl --> FrameSync
   RendererImpl --> IOverlayPass
-  FluidRenderer --> FluidRenderSnapshot : consome
-  FluidRenderer *-- AllocatedBuffer
-  TerrainRenderer *-- AllocatedBuffer
-  TerrainRenderer *-- AllocatedImage
+  LatticeRenderer --> LatticeRenderSnapshot : consome
+  LatticeRenderer *-- AllocatedBuffer
 }
 
 package ui {
@@ -86,7 +82,7 @@ IOverlayPass ..> CommandList
 TerrainRenderer --> TerrainData
 TerrainRenderer --> ImageData
 
-note bottom of FluidRenderSnapshot
+note bottom of LatticeRenderSnapshot
   O renderer recebe apenas buffer opaco,
   quantidade de partículas e sinal de prontidão.
 end note

@@ -67,13 +67,7 @@ bool ui::ParametersPanel::Draw() {
 }
 
 bool ui::ParametersPanel::AreAllRequiredDefined() const {
-  return values_.total_fluid_volume.has_value() &&
-         values_.initial_particle_spacing.has_value() &&
-         values_.voxel_max_particles.has_value() &&
-         values_.viscosity.has_value() && values_.rest_density.has_value() &&
-         values_.gas_constant.has_value() &&
-         values_.coefficient_of_restitution.has_value() &&
-         values_.friction.has_value() && values_.yield_stress.has_value();
+  return domain::ValidateSimulationSettings(values_).empty();
 }
 
 void ui::ParametersPanel::MenuBar() {
@@ -147,7 +141,7 @@ bool ui::ParametersPanel::TabBar() {
 
   if (ImGui::BeginTabBar("TabBar")) {
     changed |= TerrainTab();
-    // Legacy fluid settings remain in project files until the solver migration.
+    changed |= ParametersTab();
 
     ImGui::EndTabBar();
   }
@@ -159,6 +153,7 @@ bool ui::ParametersPanel::TerrainTab() {
   bool changed = false;
 
   if (ImGui::BeginTabItem("Terrain")) {
+    ImGui::BeginDisabled(locked_);
     ImGui::InputText("DEM", &dem_texture_path_, ImGuiInputTextFlags_ReadOnly);
     if (ImGui::IsItemHovered()) {
       ImGui::SetTooltip("Path to the DEM file");
@@ -171,6 +166,7 @@ bool ui::ParametersPanel::TerrainTab() {
     changed |=
         ImGui::InputFloat("Upper elevation margin (m)",
                           &values_.lattice.upper_elevation_margin, 1.0F, 10.0F);
+    ImGui::EndDisabled();
     ImGui::EndTabItem();
   }
   return changed;
@@ -182,107 +178,26 @@ bool ui::ParametersPanel::ParametersTab() {
   if (!ImGui::BeginTabItem("Parameters")) {
     return changed;
   }
+  ImGui::BeginDisabled(locked_);
 
-  ImGui::AlignTextToFramePadding();
-  ImGui::Text("Initialization");
+  auto& p = values_.lbm;
+  ImGui::TextUnformatted("D3Q19 free-surface LBM");
+  changed |=
+      ImGui::InputFloat("Steps per second", &p.steps_per_second, 1, 10, "%.1f");
+  changed |= ImGui::InputFloat("Initial density", &p.initial_density, .01F, .1F,
+                               "%.4f");
+  changed |= ImGui::SliderFloat("Omega", &p.omega, 0.01F, 1.99F, "%.4f");
+  changed |= ImGui::InputFloat("Atmospheric density", &p.atmospheric_density,
+                               .01F, .1F, "%.4f");
+  changed |=
+      ImGui::InputFloat("Maximum velocity", &p.max_velocity, .01F, .1F, "%.4f");
+  changed |=
+      ImGui::InputFloat("Fill offset", &p.fill_offset, .001F, .01F, "%.4f");
+  changed |=
+      ImGui::SliderFloat("Lonely threshold", &p.lonely_threshold, 0, 1, "%.3f");
+  changed |= ImGui::InputFloat3("Gravity", &p.gravity.x, "%.5f");
 
-  float total_fluid_volume = values_.total_fluid_volume.value_or(0.00F);
-  if (ImGui::InputFloat("Total Tailings Volume (m³)", &total_fluid_volume,
-                        500000.0F, 1000000.0F, "%.2f")) {
-    values_.total_fluid_volume = total_fluid_volume;
-    changed = true;
-  }
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("Total volume of tailings to simulate");
-  }
-
-  float initial_particle_spacing =
-      values_.initial_particle_spacing.value_or(0.010F);
-  if (ImGui::InputFloat("Initial Particle Spacing (m)",
-                        &initial_particle_spacing, 0.5F, 1.0F, "%.3f")) {
-    values_.initial_particle_spacing = initial_particle_spacing;
-    changed = true;
-  }
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("Distance between particles in the initial state");
-  }
-
-  int voxel_max_particles =
-      static_cast<int>(values_.voxel_max_particles.value_or(16));
-  if (ImGui::SliderInt("Max Particles Per Voxel", &voxel_max_particles, 1, 64,
-                       "%d")) {
-    values_.voxel_max_particles = static_cast<uint32_t>(voxel_max_particles);
-    changed = true;
-  }
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("Maximum particles per bucket cell");
-  }
-
-  ImGui::Spacing();
-
-  ImGui::Text("Fluid Properties");
-
-  float rest_density = values_.rest_density.value_or(500.00F);
-  if (ImGui::SliderFloat("Rest Density (kg/m³)", &rest_density, 500.0F,
-                         10000.0F, "%.2f")) {
-    values_.rest_density = rest_density;
-    changed = true;
-  }
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("Reference density of the fluid");
-  }
-
-  float gas_constant = values_.gas_constant.value_or(1.00F);
-  if (ImGui::SliderFloat("Gas Constant (Pa·m³/kg)", &gas_constant, 1.0F,
-                         1000.0F, "%.2f")) {
-    values_.gas_constant = gas_constant;
-    changed = true;
-  }
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("Parameter k in the equation of state: p = k(ρ - ρ0)");
-  }
-
-  float friction = values_.friction.value_or(0.0F);
-  if (ImGui::SliderFloat("Friction Coefficient", &friction, 0.0F, 0.1F,
-                         "%.4f")) {
-    values_.friction = friction;
-    changed = true;
-  }
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("Boundary friction coefficient");
-  }
-
-  float viscosity = values_.viscosity.value_or(1.00F);
-  if (ImGui::SliderFloat("Plastic Viscosity (cP)", &viscosity, 1.0F, 10000.0F,
-                         "%.2f")) {
-    values_.viscosity = viscosity;
-    changed = true;
-  }
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("Dynamic viscosity of the fluid (Bingham model)");
-  }
-
-  float yield_stress = values_.yield_stress.value_or(0.000F);
-  if (ImGui::SliderFloat("Yield Stress (Pa)", &yield_stress, 0.0F, 10000.0F,
-                         "%.3f")) {
-    values_.yield_stress = yield_stress;
-    changed = true;
-  }
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("Minimum stress for flow (Bingham model)");
-  }
-
-  float coefficient_of_restitution =
-      values_.coefficient_of_restitution.value_or(0.067F);
-  if (ImGui::SliderFloat("Coefficient of Restitution",
-                         &coefficient_of_restitution, 0.0F, 1.0F, "%.3f")) {
-    values_.coefficient_of_restitution = coefficient_of_restitution;
-    changed = true;
-  }
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("Elasticity of contact (0 = perfectly inelastic)");
-  }
-
+  ImGui::EndDisabled();
   ImGui::EndTabItem();
 
   return changed;

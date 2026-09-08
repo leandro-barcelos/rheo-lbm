@@ -39,6 +39,7 @@ class ApplicationController final : public ICommandSink {
   void Handle(PlaySimulation const& command);
   void Handle(PauseSimulation const& command);
   void Handle(ResetSimulation const& command);
+  void Handle(RemoveDam const& command);
   void Handle(RequestQuit const& command);
   void Handle(SetBrush const& command);
   void Handle(BrushPointer const& command);

@@ -17,12 +17,14 @@ class ControlPanel {
     bool play_pressed = false;
     bool pause_pressed = false;
     bool reset_pressed = false;
+    bool remove_dam_pressed = false;
     bool draw_dam_pressed = false;
     bool fill_dam_pressed = false;
   };
 
-  [[nodiscard]] Events Draw(bool simulation_running, bool can_play,
-                            bool can_edit_dam);
+  [[nodiscard]] Events Draw(bool simulation_running, bool simulation_paused,
+                            bool can_play, bool can_restore,
+                            bool can_remove_dam, std::uint64_t physical_steps);
 
   [[nodiscard]] DamMode const& DamMode() const { return dam_mode_; }
 

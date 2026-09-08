@@ -1,10 +1,14 @@
 #include "rheo/application/application_controller.h"
 
+#include <source_location>
 #include <stdexcept>
 #include <string>
 using namespace application;
-void Check(bool value) {
-  if (!value) throw std::runtime_error("controller check failed");
+void Check(bool value,
+           std::source_location location = std::source_location::current()) {
+  if (!value)
+    throw std::runtime_error("controller check failed at line " +
+                             std::to_string(location.line()));
 }
 class FakeDemLoader final : public assets::IDemLoader {
  public:
@@ -54,6 +58,7 @@ class FakeSession final : public simulation::ISimulationSession {
     ++initializations;
     if (fail) return std::unexpected("GPU failure");
     changed = false;
+    state = simulation::SimulationState::kEditing;
     snapshot = simulation::LatticeRenderSnapshot{
         .cell_count = 13,
         .ready_signal = static_cast<std::uint64_t>(initializations)};
@@ -63,6 +68,7 @@ class FakeSession final : public simulation::ISimulationSession {
     return {.changed = changed};
   }
   bool changed = false;
+  simulation::SimulationState state = simulation::SimulationState::kEditing;
   void BeginStroke() override {}
   void EndStroke() override {}
   std::expected<void, std::string> Edit(
@@ -73,16 +79,39 @@ class FakeSession final : public simulation::ISimulationSession {
   std::optional<domain::LatticeEdits> ExportEdits() const override {
     return {};
   }
-  void Play() override { throw std::runtime_error("SPH must remain disabled"); }
-  void Pause() override {}
+  std::expected<void, std::string> Play(domain::LbmSettings const&) override {
+    state = simulation::SimulationState::kRunning;
+    return {};
+  }
+  void Pause() override { state = simulation::SimulationState::kPaused; }
+  std::expected<void, std::string> ResetToTerrain() override {
+    state = simulation::SimulationState::kEditing;
+    changed = false;
+    return {};
+  }
+  std::expected<void, std::string> RemoveDam() override {
+    if (state != simulation::SimulationState::kRunning)
+      return std::unexpected("not running");
+    dam = false;
+    return {};
+  }
   void Clear() override {
     ++clears;
     snapshot.reset();
+    state = simulation::SimulationState::kEditing;
   }
   std::optional<simulation::LatticeRenderSnapshot> Update(double) override {
     return snapshot;
   }
-  bool IsRunning() const override { return false; }
+  bool IsRunning() const override {
+    return state == simulation::SimulationState::kRunning;
+  }
+  simulation::SimulationState State() const override { return state; }
+  std::uint64_t PhysicalStepCount() const override { return 0; }
+  bool CanRemoveDam() const override {
+    return state == simulation::SimulationState::kRunning && dam;
+  }
+  bool dam = true;
   bool IsReady() const override { return snapshot.has_value(); }
 };
 int main() {
@@ -96,14 +125,15 @@ int main() {
     app.ProcessPendingCommands();
   };
   submit(ImportTerrain{"dem.tif"});
-  Check(app.ViewState().terrain_loaded && !app.ViewState().can_play);
+  Check(app.ViewState().terrain_loaded && app.ViewState().can_play &&
+        app.ViewState().can_edit);
   Check(app.SceneState().dem == loader.dem &&
         app.SceneState().lattice.has_value());
   Check(session.initializations == 1 && !app.ViewState().last_error);
   for (int i = 0; i < 10; ++i) app.Update(16);
   Check(session.initializations == 1);
   auto draft = app.ViewState().simulation;
-  draft.viscosity = 5;
+  draft.lbm.omega = 1.1F;
   submit(UpdateSimulationDraft{draft});
   Check(session.initializations == 1 && app.SceneState().lattice.has_value());
   draft.lattice.height_subdivisions = 26;
@@ -150,13 +180,20 @@ int main() {
   Check(app.ViewState().terrain_path == "project.tif" &&
         app.SceneState().lattice.has_value());
   Check(!app.ViewState().last_error &&
-        !app.ViewState().simulation.total_fluid_volume);
+        app.ViewState().simulation.lbm == domain::LbmSettings{});
   int before = session.initializations;
   submit(ResetSimulation{});
   Check(session.initializations == before &&
         app.SceneState().lattice.has_value());
   submit(PlaySimulation{});
-  Check(!app.ViewState().simulation_running);
+  Check(app.ViewState().simulation_running && app.ViewState().can_remove_dam);
+  submit(RemoveDam{});
+  Check(app.ViewState().simulation_running && !app.ViewState().can_remove_dam &&
+        !app.ViewState().last_error);
+  submit(PauseSimulation{});
+  Check(app.ViewState().simulation_paused && app.ViewState().can_play);
+  submit(ResetSimulation{});
+  Check(app.ViewState().can_edit && !app.ViewState().simulation_paused);
   submit(SaveProject{"saved"});
   Check(repository.document.terrain_path == "project.tif");
   submit(NewProject{});

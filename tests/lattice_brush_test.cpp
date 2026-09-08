@@ -38,9 +38,18 @@ class Session : public simulation::ISimulationSession {
     return {};
   }
   void Clear() override {}
-  void Play() override {}
+  std::expected<void, std::string> Play(domain::LbmSettings const&) override {
+    return {};
+  }
   void Pause() override {}
+  std::expected<void, std::string> ResetToTerrain() override { return {}; }
+  std::expected<void, std::string> RemoveDam() override { return {}; }
   bool IsRunning() const override { return false; }
+  simulation::SimulationState State() const override {
+    return simulation::SimulationState::kEditing;
+  }
+  std::uint64_t PhysicalStepCount() const override { return 0; }
+  bool CanRemoveDam() const override { return false; }
   bool IsReady() const override { return true; }
   std::optional<simulation::LatticeRenderSnapshot> Update(double) override {
     return {};

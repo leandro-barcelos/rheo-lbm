@@ -28,6 +28,7 @@ struct NewProject {};
 struct PlaySimulation {};
 struct PauseSimulation {};
 struct ResetSimulation {};
+struct RemoveDam {};
 struct RequestQuit {};
 struct SetBrush {
   domain::BrushSettings settings;
@@ -42,8 +43,8 @@ struct ConfirmDiscard {
 using ApplicationCommand =
     std::variant<UpdateSimulationDraft, ImportTerrain, SetTerrainTexture,
                  LoadProject, SaveProject, NewProject, PlaySimulation,
-                 PauseSimulation, ResetSimulation, RequestQuit, SetBrush,
-                 BrushPointer, RunEditorAction, ConfirmDiscard>;
+                 PauseSimulation, ResetSimulation, RemoveDam, RequestQuit,
+                 SetBrush, BrushPointer, RunEditorAction, ConfirmDiscard>;
 
 class ICommandSink {
  public:

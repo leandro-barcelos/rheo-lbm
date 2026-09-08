@@ -52,7 +52,7 @@ loop enquanto a aplicação estiver aberta
 
   Root -> Application : Update(delta_ms)
   Application -> Simulation : Update(delta_ms)
-  Simulation --> Application : optional<FluidRenderSnapshot>
+  Simulation --> Application : optional<LatticeRenderSnapshot>
 
   Root -> Application : SceneState()
   Application --> Root : SceneState const&

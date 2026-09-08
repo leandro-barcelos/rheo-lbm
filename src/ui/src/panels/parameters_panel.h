@@ -47,6 +47,7 @@ class ParametersPanel {
   void SetVisualizationTexturePath(std::string const& path) {
     visualization_texture_path_ = path;
   }
+  void SetLocked(bool locked) { locked_ = locked; }
 
  private:
   Events events_{};
@@ -56,6 +57,7 @@ class ParametersPanel {
   std::string simulation_config_path_;
   bool help_modal_opened_ = false;
   bool menu_changed_ = false;
+  bool locked_ = false;
   void MenuBar();
   bool TabBar();
   bool TerrainTab();

@@ -4,6 +4,8 @@ static const int INTERFACE_CELL = 1;
 static const int GAS_CELL = 2;
 static const int TERRAIN_OBSTACLE_CELL = 3;
 static const int DAM_OBSTACLE_CELL = 4;
+static const int INTERFACE_TO_FLUID_CELL = 5;
+static const int INTERFACE_TO_GAS_CELL = 6;
 struct Cell {
     float4 position;
     float4 velocity;

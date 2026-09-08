@@ -2,6 +2,7 @@ add_library(
     rheo_simulation STATIC
     src/lattice_initializer.cpp
     src/lattice_editor.cpp
+    src/lbm_solver.cpp
     src/simulation_session.cpp
 )
 add_library(rheo::simulation ALIAS rheo_simulation)

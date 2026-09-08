@@ -1,5 +1,6 @@
 #include "rheo/application/application_controller.h"
 
+#include <exception>
 #include <filesystem>
 #include <string>
 #include <utility>
@@ -44,13 +45,26 @@ void application::ApplicationController::ProcessPendingCommands() {
 }
 
 void application::ApplicationController::Update(double delta_ms) {
-  scene_state_.lattice = simulation_.Update(delta_ms);
+  try {
+    scene_state_.lattice = simulation_.Update(delta_ms);
+  } catch (std::exception const& error) {
+    simulation_.Pause();
+    SetError(std::string("LBM step failed: ") + error.what());
+  }
   view_state_.simulation_running = simulation_.IsRunning();
+  view_state_.simulation_paused =
+      simulation_.State() == simulation::SimulationState::kPaused;
+  view_state_.physical_step_count = simulation_.PhysicalStepCount();
+  RefreshSimulationConfig();
   RefreshEditor();
 }
 
 void application::ApplicationController::Handle(
     UpdateSimulationDraft const& command) {
+  if (simulation_.State() != simulation::SimulationState::kEditing) {
+    SetError("Restore the terrain before changing simulation parameters");
+    return;
+  }
   auto const valid = domain::ValidateLatticeSettings(command.draft.lattice);
   if (!valid) {
     SetError(valid.error());
@@ -197,13 +211,22 @@ void application::ApplicationController::Handle(NewProject const&) {
 }
 
 void application::ApplicationController::Handle(PlaySimulation const&) {
-  SetError("Fluid dynamics is not available yet");
+  brush_.Finish();
+  auto result = simulation_.Play(view_state_.simulation.lbm);
+  if (!result) {
+    SetError(result.error());
+    return;
+  }
+  view_state_.last_error.reset();
+  RefreshSimulationConfig();
+  RefreshEditor();
 }
 
 void application::ApplicationController::Handle(PauseSimulation const&) {
   simulation_.Pause();
-  view_state_.simulation_running = false;
   view_state_.last_error.reset();
+  RefreshSimulationConfig();
+  RefreshEditor();
 }
 
 void application::ApplicationController::Handle(ResetSimulation const&) {
@@ -212,16 +235,27 @@ void application::ApplicationController::Handle(ResetSimulation const&) {
     return;
   }
   brush_.Finish();
-  auto result =
-      simulation_.Edit({.kind = simulation::EditOperation::Kind::kRestore});
+  auto result = simulation_.ResetToTerrain();
   if (!result) {
     SetError(result.error());
     return;
   }
   scene_state_.lattice = simulation_.Update(0);
   ++scene_state_.revision;
+  RefreshSimulationConfig();
   ResetEditor();
   view_state_.last_error.reset();
+}
+
+void application::ApplicationController::Handle(RemoveDam const&) {
+  auto result = simulation_.RemoveDam();
+  if (!result) {
+    SetError(result.error());
+    return;
+  }
+  scene_state_.lattice = simulation_.Update(0);
+  view_state_.last_error.reset();
+  RefreshSimulationConfig();
 }
 
 void application::ApplicationController::Handle(RequestQuit const&) {
@@ -229,13 +263,19 @@ void application::ApplicationController::Handle(RequestQuit const&) {
 }
 
 void application::ApplicationController::RefreshSimulationConfig() {
-  view_state_.validation_errors.clear();
-  if (auto valid =
-          domain::ValidateLatticeSettings(view_state_.simulation.lattice);
-      !valid)
-    view_state_.validation_errors.push_back(valid.error());
-  view_state_.can_play = false;
-  view_state_.simulation_running = false;
+  view_state_.validation_errors =
+      domain::ValidateSimulationSettings(view_state_.simulation);
+  auto state = simulation_.State();
+  view_state_.simulation_running =
+      state == simulation::SimulationState::kRunning;
+  view_state_.simulation_paused = state == simulation::SimulationState::kPaused;
+  view_state_.can_edit = view_state_.terrain_loaded &&
+                         state == simulation::SimulationState::kEditing;
+  view_state_.can_play = view_state_.terrain_loaded &&
+                         state != simulation::SimulationState::kRunning &&
+                         view_state_.validation_errors.empty();
+  view_state_.can_remove_dam = simulation_.CanRemoveDam();
+  view_state_.physical_step_count = simulation_.PhysicalStepCount();
 }
 
 void application::ApplicationController::SetError(std::string message) {
@@ -247,8 +287,8 @@ void application::ApplicationController::RefreshEditor() {
   view_state_.editor = brush_.Preview();
   scene_state_.preview = brush_.Preview();
   view_state_.has_edits = state.changed;
-  view_state_.can_undo = state.can_undo;
-  view_state_.can_redo = state.can_redo;
+  view_state_.can_undo = view_state_.can_edit && state.can_undo;
+  view_state_.can_redo = view_state_.can_edit && state.can_redo;
   view_state_.min_elevation = state.min_elevation;
   if (state.definition) {
     view_state_.max_elevation = state.definition->height - 1;
@@ -264,17 +304,19 @@ void application::ApplicationController::ResetEditor() {
   RefreshEditor();
 }
 void application::ApplicationController::Handle(SetBrush const& c) {
+  if (!view_state_.can_edit) return;
   brush_.Settings(c.settings);
   RefreshEditor();
 }
 void application::ApplicationController::Handle(BrushPointer const& c) {
   auto pointer = c;
-  pointer.blocked |= pending_draft_.has_value();
+  pointer.blocked |= pending_draft_.has_value() || !view_state_.can_edit;
   auto result = brush_.Pointer(pointer);
   if (!result) SetError(result.error());
   RefreshEditor();
 }
 void application::ApplicationController::Handle(RunEditorAction const& c) {
+  if (!view_state_.can_edit) return;
   auto result = brush_.Action(c.action);
   if (!result) SetError(result.error());
   RefreshEditor();

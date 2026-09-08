@@ -23,16 +23,6 @@ std::optional<T> ReadOptional(YAML::Node const& node, char const* key) {
   return child.as<T>();
 }
 
-template <typename T>
-void WriteOptional(YAML::Node& node, char const* key,
-                   std::optional<T> const& value) {
-  if (value) {
-    node[key] = *value;
-  } else {
-    node[key] = YAML::Node{};
-  }
-}
-
 }  // namespace
 
 std::expected<domain::ProjectDocument, assets::AssetError>
@@ -40,7 +30,7 @@ assets::ProjectRepository::Load(std::string const& path) const {
   try {
     YAML::Node const root = YAML::LoadFile(path);
     int version = root["version"] ? root["version"].as<int>() : 1;
-    if (version != 1 && version != 2)
+    if (version < 1 || version > 3)
       throw std::runtime_error("Unsupported project version");
     YAML::Node const parameters = root["parameters"];
     if (!parameters || !parameters.IsMap()) {
@@ -49,20 +39,33 @@ assets::ProjectRepository::Load(std::string const& path) const {
 
     domain::ProjectDocument document;
     auto& draft = document.simulation;
-    draft.total_fluid_volume =
-        ReadOptional<float>(parameters, "total_fluid_volume");
-    draft.initial_particle_spacing =
-        ReadOptional<float>(parameters, "initial_particle_spacing");
-    draft.dem_resolution = ReadOptional<float>(parameters, "dem_resolution");
-    draft.voxel_max_particles =
-        ReadOptional<std::uint32_t>(parameters, "voxel_max_particles");
-    draft.viscosity = ReadOptional<float>(parameters, "viscosity");
-    draft.rest_density = ReadOptional<float>(parameters, "rest_density");
-    draft.gas_constant = ReadOptional<float>(parameters, "gas_constant");
-    draft.coefficient_of_restitution =
-        ReadOptional<float>(parameters, "coefficient_of_restitution");
-    draft.friction = ReadOptional<float>(parameters, "friction");
-    draft.yield_stress = ReadOptional<float>(parameters, "yield_stress");
+    if (version == 3) {
+      auto& lbm = draft.lbm;
+      lbm.steps_per_second =
+          ReadOptional<float>(parameters, "steps_per_second").value_or(15.0F);
+      lbm.initial_density =
+          ReadOptional<float>(parameters, "initial_density").value_or(1.0F);
+      lbm.omega = ReadOptional<float>(parameters, "omega").value_or(1.25F);
+      lbm.atmospheric_density =
+          ReadOptional<float>(parameters, "atmospheric_density").value_or(1.0F);
+      lbm.max_velocity =
+          ReadOptional<float>(parameters, "max_velocity").value_or(0.25F);
+      lbm.fill_offset =
+          ReadOptional<float>(parameters, "fill_offset").value_or(0.003F);
+      lbm.lonely_threshold =
+          ReadOptional<float>(parameters, "lonely_threshold").value_or(0.1F);
+      auto gravity = parameters["gravity"];
+      if (gravity) {
+        if (!gravity.IsSequence() || gravity.size() != 3)
+          throw std::runtime_error("Invalid gravity vector");
+        lbm.gravity = {gravity[0].as<float>(), gravity[1].as<float>(),
+                       gravity[2].as<float>()};
+      }
+      auto errors = domain::ValidateLbmSettings(lbm);
+      if (!errors.empty())
+        return std::unexpected(
+            AssetError{"Invalid LBM parameters: " + errors.front()});
+    }
     draft.lattice.height_subdivisions =
         ReadOptional<std::int32_t>(parameters, "height_subdivisions")
             .value_or(13);
@@ -79,7 +82,7 @@ assets::ProjectRepository::Load(std::string const& path) const {
         root["terrain_texture_path"]
             ? root["terrain_texture_path"].as<std::string>()
             : std::string{};
-    if (version == 2 && root["lattice_edits"]) {
+    if (version >= 2 && root["lattice_edits"]) {
       auto node = root["lattice_edits"];
       domain::LatticeEdits edits;
       edits.dem_fingerprint = node["dem_sha256"].as<std::string>();
@@ -114,8 +117,9 @@ assets::ProjectRepository::Load(std::string const& path) const {
         auto start = run[0].as<std::uint32_t>();
         auto size = run[1].as<std::uint32_t>();
         auto type = run[2].as<int>();
-        if (type < 0 || type > 4 || !size || start < end ||
-            std::uint64_t(start) + size > d.cell_count)
+        if (type < 0 || type > 4 ||
+            !domain::IsPersistentCellType(static_cast<std::uint8_t>(type)) ||
+            !size || start < end || std::uint64_t(start) + size > d.cell_count)
           throw std::runtime_error("Invalid edit range or type");
         end = std::uint64_t(start) + size;
         edits.runs.push_back({start, size, static_cast<std::uint8_t>(type)});
@@ -137,23 +141,24 @@ std::expected<void, assets::AssetError> assets::ProjectRepository::Save(
     }
 
     YAML::Node root;
-    root["version"] = 2;
+    root["version"] = 3;
     root["elevation_texture_path"] = document.terrain_path;
     root["terrain_texture_path"] = document.terrain_texture_path;
     YAML::Node parameters;
     auto const& draft = document.simulation;
-    WriteOptional(parameters, "total_fluid_volume", draft.total_fluid_volume);
-    WriteOptional(parameters, "initial_particle_spacing",
-                  draft.initial_particle_spacing);
-    WriteOptional(parameters, "voxel_max_particles", draft.voxel_max_particles);
-    WriteOptional(parameters, "viscosity", draft.viscosity);
-    WriteOptional(parameters, "rest_density", draft.rest_density);
-    WriteOptional(parameters, "gas_constant", draft.gas_constant);
-    WriteOptional(parameters, "coefficient_of_restitution",
-                  draft.coefficient_of_restitution);
-    WriteOptional(parameters, "friction", draft.friction);
-    WriteOptional(parameters, "yield_stress", draft.yield_stress);
-    WriteOptional(parameters, "dem_resolution", draft.dem_resolution);
+    auto errors = domain::ValidateLbmSettings(draft.lbm);
+    if (!errors.empty())
+      throw std::runtime_error("Invalid LBM parameters: " + errors.front());
+    parameters["steps_per_second"] = draft.lbm.steps_per_second;
+    parameters["initial_density"] = draft.lbm.initial_density;
+    parameters["omega"] = draft.lbm.omega;
+    parameters["atmospheric_density"] = draft.lbm.atmospheric_density;
+    parameters["max_velocity"] = draft.lbm.max_velocity;
+    parameters["fill_offset"] = draft.lbm.fill_offset;
+    parameters["lonely_threshold"] = draft.lbm.lonely_threshold;
+    for (float component :
+         {draft.lbm.gravity.x, draft.lbm.gravity.y, draft.lbm.gravity.z})
+      parameters["gravity"].push_back(component);
     parameters["height_subdivisions"] = draft.lattice.height_subdivisions;
     parameters["upper_elevation_margin"] = draft.lattice.upper_elevation_margin;
     root["parameters"] = parameters;

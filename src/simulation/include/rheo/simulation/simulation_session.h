@@ -1,6 +1,7 @@
 #ifndef RHEO_SIMULATION_SIMULATION_SESSION_H
 #define RHEO_SIMULATION_SIMULATION_SESSION_H
 
+#include <cstdint>
 #include <expected>
 #include <memory>
 #include <optional>
@@ -14,6 +15,7 @@
 #include "rheo/simulation/simulation_types.h"
 
 namespace simulation {
+enum class SimulationState { kEditing, kRunning, kPaused };
 struct EditState {
   std::optional<domain::LatticeDefinition> definition;
   std::span<std::uint8_t const> types;
@@ -46,12 +48,18 @@ class ISimulationSession {
   virtual std::expected<void, std::string> Edit(
       EditOperation const& operation) = 0;
   virtual std::optional<domain::LatticeEdits> ExportEdits() const = 0;
-  virtual void Play() = 0;
+  virtual std::expected<void, std::string> Play(
+      domain::LbmSettings const& settings) = 0;
   virtual void Pause() = 0;
+  virtual std::expected<void, std::string> ResetToTerrain() = 0;
+  virtual std::expected<void, std::string> RemoveDam() = 0;
   virtual void Clear() = 0;
   [[nodiscard]] virtual std::optional<LatticeRenderSnapshot> Update(
       double delta_ms) = 0;
   [[nodiscard]] virtual bool IsRunning() const = 0;
+  [[nodiscard]] virtual SimulationState State() const = 0;
+  [[nodiscard]] virtual std::uint64_t PhysicalStepCount() const = 0;
+  [[nodiscard]] virtual bool CanRemoveDam() const = 0;
   [[nodiscard]] virtual bool IsReady() const = 0;
 };
 
@@ -74,12 +82,18 @@ class SimulationSession final : public ISimulationSession {
   std::expected<void, std::string> Edit(
       EditOperation const& operation) override;
   std::optional<domain::LatticeEdits> ExportEdits() const override;
-  void Play() override;
+  std::expected<void, std::string> Play(
+      domain::LbmSettings const& settings) override;
   void Pause() override;
+  std::expected<void, std::string> ResetToTerrain() override;
+  std::expected<void, std::string> RemoveDam() override;
   void Clear() override;
   [[nodiscard]] std::optional<LatticeRenderSnapshot> Update(
       double delta_ms) override;
   [[nodiscard]] bool IsRunning() const override;
+  [[nodiscard]] SimulationState State() const override;
+  [[nodiscard]] std::uint64_t PhysicalStepCount() const override;
+  [[nodiscard]] bool CanRemoveDam() const override;
   [[nodiscard]] bool IsReady() const override;
 
  private:

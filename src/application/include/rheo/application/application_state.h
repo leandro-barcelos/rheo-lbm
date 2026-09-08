@@ -27,7 +27,11 @@ struct ApplicationViewState {
   float meters_per_cell = 0, min_elevation = 0, terrain_elevation_cells = 1;
   bool can_play = false;
   bool simulation_running = false;
+  bool simulation_paused = false;
+  bool can_edit = false;
+  bool can_remove_dam = false;
   bool terrain_loaded = false;
+  std::uint64_t physical_step_count = 0;
 };
 
 struct SceneState {

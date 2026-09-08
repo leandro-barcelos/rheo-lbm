@@ -28,6 +28,7 @@ package "Alternativas de ApplicationCommand" {
   class PlaySimulation
   class PauseSimulation
   class ResetSimulation
+  class RemoveDam
   class RequestQuit
 }
 
@@ -45,6 +46,7 @@ Command ..> NewProject : alternativa
 Command ..> PlaySimulation : alternativa
 Command ..> PauseSimulation : alternativa
 Command ..> ResetSimulation : alternativa
+Command ..> RemoveDam : alternativa
 Command ..> RequestQuit : alternativa
 
 note bottom of Controller

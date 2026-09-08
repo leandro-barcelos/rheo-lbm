@@ -26,12 +26,15 @@ package application {
     + last_error: optional<string>
     + can_play: bool
     + simulation_running: bool
+    + simulation_paused: bool
+    + can_remove_dam: bool
+    + physical_step_count: uint64
   }
 
   class SceneState <<read model>> {
     + terrain: SharedTerrain
     + terrain_texture: SharedImage
-    + fluid: optional<FluidRenderSnapshot>
+    + fluid: optional<LatticeRenderSnapshot>
     + revision: uint64
   }
 
@@ -40,19 +43,10 @@ package application {
 
 package domain {
   class SimulationSettingsDraft {
-    + total_fluid_volume: optional<float>
-    + initial_particle_spacing: optional<float>
-    + dem_resolution: optional<float>
-    + voxel_max_particles: optional<uint32>
-    + viscosity: optional<float>
-    + rest_density: optional<float>
-    + gas_constant: optional<float>
-    + coefficient_of_restitution: optional<float>
-    + friction: optional<float>
-    + yield_stress: optional<float>
+    + lattice: LatticeSettings
+    + lbm: LbmSettings
   }
-
-  class SimulationConfig <<validated>>
+  class LbmSettings <<validated>>
   class ProjectDocument
   class TerrainData {
     + samples: vector<Elevation>
@@ -80,7 +74,7 @@ package assets {
 
 package simulation {
   interface ISimulationSession
-  class FluidRenderSnapshot
+  class LatticeRenderSnapshot
 }
 
 ApplicationController ..|> ICommandSink
@@ -94,9 +88,9 @@ ApplicationController --> ISimulationSession
 ApplicationViewState *-- SimulationSettingsDraft
 SceneState o-- "0..1" TerrainData
 SceneState o-- "0..1" ImageData
-SceneState o-- "0..1" FluidRenderSnapshot
+SceneState o-- "0..1" LatticeRenderSnapshot
 
-SimulationConfig o-- "1" TerrainData
+SimulationSettingsDraft *-- LbmSettings
 ProjectDocument *-- SimulationSettingsDraft
 TerrainData *-- "0..*" Elevation
 
@@ -106,7 +100,7 @@ ProjectRepository ..|> IProjectRepository
 ITerrainLoader ..> TerrainData : produz
 IImageLoader ..> ImageData : produz
 IProjectRepository ..> ProjectDocument : carrega / salva
-ISimulationSession ..> SimulationConfig : recebe
-ISimulationSession ..> FluidRenderSnapshot : produz
+ISimulationSession ..> LbmSettings : recebe
+ISimulationSession ..> LatticeRenderSnapshot : produz
 
 @enduml

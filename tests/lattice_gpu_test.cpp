@@ -1,4 +1,5 @@
 #include <array>
+#include <cmath>
 #include <iostream>
 #include <stdexcept>
 #include <vector>
@@ -58,6 +59,49 @@ std::vector<simulation::Cell> Read(
   auto const* data =
       static_cast<simulation::Cell const*>(buffer.memory.mapMemory(0, size));
   std::vector<simulation::Cell> result(data, data + snapshot.cell_count);
+  buffer.memory.unmapMemory();
+  return result;
+}
+std::vector<float> ReadMomentum(
+    graphics::Device const& device, graphics::CommandPools const& pools,
+    graphics::FrameSync& sync,
+    simulation::LatticeRenderSnapshot const& snapshot) {
+  auto size = vk::DeviceSize(snapshot.momentum_count) * sizeof(float);
+  auto buffer = graphics::BufferAllocator::CreateBuffer(
+      device, size, vk::BufferUsageFlagBits::eTransferDst,
+      vk::MemoryPropertyFlagBits::eHostVisible |
+          vk::MemoryPropertyFlagBits::eHostCoherent);
+  auto command = std::move(
+      device.LogicalDevice()
+          .allocateCommandBuffers({.commandPool = *pools.Graphics(),
+                                   .level = vk::CommandBufferLevel::ePrimary,
+                                   .commandBufferCount = 1})
+          .front());
+  command.begin({.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+  command.copyBuffer(vk::Buffer(reinterpret_cast<VkBuffer>(
+                         snapshot.momentum_buffer.native_handle)),
+                     *buffer.buffer, vk::BufferCopy(0, 0, size));
+  command.end();
+  auto signal = sync.GetNextTimelineValue();
+  vk::TimelineSemaphoreSubmitInfo timeline{
+      .waitSemaphoreValueCount = 1,
+      .pWaitSemaphoreValues = &snapshot.ready_signal,
+      .signalSemaphoreValueCount = 1,
+      .pSignalSemaphoreValues = &signal};
+  vk::PipelineStageFlags stage = vk::PipelineStageFlagBits::eTransfer;
+  device.GraphicsQueue().submit(
+      vk::SubmitInfo{.pNext = &timeline,
+                     .waitSemaphoreCount = 1,
+                     .pWaitSemaphores = &*sync.Semaphore(),
+                     .pWaitDstStageMask = &stage,
+                     .commandBufferCount = 1,
+                     .pCommandBuffers = &*command,
+                     .signalSemaphoreCount = 1,
+                     .pSignalSemaphores = &*sync.Semaphore()},
+      nullptr);
+  sync.WaitSemaphore(device, signal);
+  auto* data = static_cast<float*>(buffer.memory.mapMemory(0, size));
+  std::vector<float> result(data, data + snapshot.momentum_count);
   buffer.memory.unmapMemory();
   return result;
 }
@@ -238,6 +282,97 @@ int main() {
   Check(session.Update(0)->lattice_buffer.native_handle ==
         previous.lattice_buffer.native_handle);
   verify();
+
+  Check(session
+            .Edit({.kind = simulation::EditOperation::Kind::kDam,
+                   .brush = {.mode = domain::BrushMode::kDam,
+                             .dam_half_width = 0},
+                   .points = {{3, 1, 2}, {3, 1, 4}}})
+            .has_value());
+
+  domain::LbmSettings lbm{.steps_per_second = 10,
+                          .initial_density = 1.2F,
+                          .omega = 1.0F,
+                          .atmospheric_density = 1.2F,
+                          .max_velocity = 0.25F,
+                          .fill_offset = 0.003F,
+                          .lonely_threshold = 0.1F,
+                          .gravity = {0, 0, 0}};
+  auto invalid_lbm = lbm;
+  invalid_lbm.omega = 2.0F;
+  auto signal_before_invalid_play = session.Update(0)->ready_signal;
+  Check(!session.Play(invalid_lbm).has_value() &&
+        session.State() == simulation::SimulationState::kEditing &&
+        session.Update(0)->ready_signal == signal_before_invalid_play);
+  Check(session.Play(lbm).has_value());
+  Check(session.State() == simulation::SimulationState::kRunning &&
+        session.PhysicalStepCount() == 0);
+  session.Pause();
+  Check(!session.CanRemoveDam() && !session.RemoveDam().has_value());
+  auto initialized_snapshot = *session.Update(0);
+  auto initialized_cells = Read(device, pools, sync, initialized_snapshot);
+  auto initialized_momentum =
+      ReadMomentum(device, pools, sync, initialized_snapshot);
+  float weights[19] = {1.0F / 3.0F,  1.0F / 18.0F, 1.0F / 18.0F, 1.0F / 18.0F,
+                       1.0F / 18.0F, 1.0F / 18.0F, 1.0F / 18.0F, 1.0F / 36.0F,
+                       1.0F / 36.0F, 1.0F / 36.0F, 1.0F / 36.0F, 1.0F / 36.0F,
+                       1.0F / 36.0F, 1.0F / 36.0F, 1.0F / 36.0F, 1.0F / 36.0F,
+                       1.0F / 36.0F, 1.0F / 36.0F, 1.0F / 36.0F};
+  for (std::size_t i = 0; i < initialized_cells.size(); ++i) {
+    bool liquid = initialized_cells[i].type == domain::CellType::kFluid ||
+                  initialized_cells[i].type == domain::CellType::kInterface;
+    for (int direction = 0; direction < 19; ++direction)
+      Check(std::abs(initialized_momentum[i * 19 + direction] -
+                     weights[direction] * (liquid ? 1.2F : 0.0F)) < 1e-6F);
+  }
+  Check(session.Play(lbm).has_value());
+  initialized_cells = Read(device, pools, sync, *session.Update(0));
+  Check(session.PhysicalStepCount() == 1);
+  Check(session.CanRemoveDam());
+  auto signal_before_dam_removal = session.Update(0)->ready_signal;
+  Check(session.RemoveDam().has_value() && !session.CanRemoveDam());
+  auto after_dam_removal = *session.Update(0);
+  Check(after_dam_removal.ready_signal > signal_before_dam_removal);
+  initialized_cells = Read(device, pools, sync, after_dam_removal);
+  for (auto const& cell : initialized_cells)
+    Check(cell.type != domain::CellType::kObstacleDam);
+  Check(!session.RemoveDam().has_value());
+  auto stepped_snapshot = *session.Update(0);
+  auto stepped_momentum = ReadMomentum(device, pools, sync, stepped_snapshot);
+  for (std::size_t cell_index = 0; cell_index < initialized_cells.size();
+       ++cell_index) {
+    auto const& cell = initialized_cells[cell_index];
+    Check(cell.type != domain::CellType::kInterfaceToFluid &&
+          cell.type != domain::CellType::kInterfaceToGas);
+    if (cell.type == domain::CellType::kFluid ||
+        cell.type == domain::CellType::kInterface) {
+      Check(std::isfinite(cell.density) && std::isfinite(cell.mass) &&
+            std::isfinite(cell.pressure));
+    }
+    bool liquid = cell.type == domain::CellType::kFluid ||
+                  cell.type == domain::CellType::kInterface;
+    for (int direction = 0; direction < 19; ++direction)
+      Check(std::abs(stepped_momentum[cell_index * 19 + direction] -
+                     weights[direction] * (liquid ? 1.2F : 0.0F)) < 1e-5F);
+  }
+  auto step_signal = session.Update(0)->ready_signal;
+  auto timeline_before_wait = sync.CurrentTimelineValue();
+  Check(session.Update(10).has_value());
+  Check(session.PhysicalStepCount() == 1 &&
+        session.Update(0)->ready_signal == step_signal &&
+        sync.CurrentTimelineValue() == timeline_before_wait);
+  session.Pause();
+  auto timeline_before_pause = sync.CurrentTimelineValue();
+  Check(session.Update(1000).has_value());
+  Check(session.State() == simulation::SimulationState::kPaused &&
+        session.PhysicalStepCount() == 1 &&
+        sync.CurrentTimelineValue() == timeline_before_pause);
+  Check(session.Play(lbm).has_value());
+  Check(session.Update(0).has_value());
+  Check(session.PhysicalStepCount() == 2);
+  Check(session.ResetToTerrain().has_value());
+  Check(session.State() == simulation::SimulationState::kEditing &&
+        session.PhysicalStepCount() == 0 && !session.Editing().changed);
   session.Clear();
   Check(!session.IsReady() && !session.Update(0));
   std::cout << "GPU lattice readback passed on "

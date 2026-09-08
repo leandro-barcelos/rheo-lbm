@@ -4,8 +4,10 @@
 #include "imgui.h"
 
 ui::ControlPanel::Events ui::ControlPanel::Draw(bool simulation_running,
-                                                bool can_play,
-                                                bool can_edit_dam) {
+                                                bool simulation_paused,
+                                                bool can_play, bool can_restore,
+                                                bool can_remove_dam,
+                                                std::uint64_t physical_steps) {
   Events events{};
 
   ImGui::SetNextWindowPos(ImVec2(12.0F, 36.0F), ImGuiCond_FirstUseEver);
@@ -23,11 +25,7 @@ ui::ControlPanel::Events ui::ControlPanel::Draw(bool simulation_running,
     }
     ImGui::EndDisabled();
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
-      if (can_play) {
-        ImGui::SetTooltip("Play");
-      } else {
-        ImGui::SetTooltip("Fluid dynamics is not available yet");
-      }
+      ImGui::SetTooltip(simulation_paused ? "Resume" : "Play");
     }
 
     ImGui::SameLine();
@@ -41,7 +39,7 @@ ui::ControlPanel::Events ui::ControlPanel::Draw(bool simulation_running,
     }
 
     ImGui::SameLine();
-    ImGui::BeginDisabled(!can_edit_dam);
+    ImGui::BeginDisabled(!can_restore);
     if (ImGui::Button(ICON_FA_ROTATE_RIGHT)) {
       events.reset_pressed = true;
     }
@@ -49,9 +47,18 @@ ui::ControlPanel::Events ui::ControlPanel::Draw(bool simulation_running,
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
       ImGui::SetTooltip("Restore terrain");
     }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!can_remove_dam);
+    if (ImGui::Button(ICON_FA_TRASH_CAN " Remove dam")) {
+      events.remove_dam_pressed = true;
+    }
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
+      ImGui::SetTooltip("Remove every dam cell while the simulation runs");
+    }
+    ImGui::Text("Physical steps: %llu",
+                static_cast<unsigned long long>(physical_steps));
   }
-
-
 
   ImGui::End();
 
