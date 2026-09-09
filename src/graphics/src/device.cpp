@@ -18,6 +18,7 @@ void graphics::Device::Init(GraphicsContext const& context,
                             vk::SurfaceKHR surface) {
   PickPhysicalDevice(context, surface);
   CreateLogicalDevice(surface);
+  memory_allocator_.Init(context, *this);
 }
 
 void graphics::Device::PickPhysicalDevice(GraphicsContext const& context,
@@ -103,12 +104,14 @@ void graphics::Device::FindQueues(vk::SurfaceKHR surface) {
     }
   }
 
-  if (!surface && queue_indices_.Graphics())
+  if (!surface && queue_indices_.Graphics()) {
     queue_indices_.SetPresent(*queue_indices_.Graphics());
+  }
   if (!queue_indices_.Compute() && queue_indices_.Graphics() &&
       (properties[*queue_indices_.Graphics()].queueFlags &
-       vk::QueueFlagBits::eCompute))
+       vk::QueueFlagBits::eCompute)) {
     queue_indices_.SetCompute(*queue_indices_.Graphics());
+  }
   if (!queue_indices_.IsComplete()) {
     throw std::runtime_error("[ERROR] Vulkan: failed to find required queues!");
   }

@@ -58,7 +58,7 @@ class SimulationSession::Impl {
       snapshot_ = LatticeRenderSnapshot{
           .lattice_buffer = {.native_handle = reinterpret_cast<std::uintptr_t>(
                                  static_cast<VkBuffer>(
-                                     *lattice_buffer_.buffer))},
+                                     *lattice_buffer_.Buffer()))},
           .lattice_width = definition->width,
           .lattice_height = definition->height,
           .lattice_depth = definition->depth,
@@ -216,7 +216,7 @@ class SimulationSession::Impl {
     if (!snapshot_ || !solver_) return;
     auto buffers = solver_->Buffers();
     snapshot_->momentum_buffer.native_handle = reinterpret_cast<std::uintptr_t>(
-        static_cast<VkBuffer>(*buffers.momentum[buffers.read_index]->buffer));
+        static_cast<VkBuffer>(*buffers.momentum[buffers.read_index]->Buffer()));
     snapshot_->momentum_count = definition_->cell_count * 19U;
   }
   domain::CellTypes base_, types_;

@@ -42,7 +42,7 @@ void LatticeRenderer::Init(graphics::Device const& device,
           .front());
   camera_buffer_ = graphics::BufferAllocator::CreateMappedUniformBuffer(
       device, sizeof(CameraUBO));
-  vk::DescriptorBufferInfo info{.buffer = *camera_buffer_.buffer,
+  vk::DescriptorBufferInfo info{.buffer = *camera_buffer_.Buffer(),
                                 .offset = 0,
                                 .range = sizeof(CameraUBO)};
   vk::WriteDescriptorSet write{
@@ -106,7 +106,7 @@ void LatticeRenderer::Render(
                                         swap_chain.Extent().height)};
   if (!uploaded_camera_ ||
       std::memcmp(&*uploaded_camera_, &ubo, sizeof(ubo)) != 0) {
-    graphics::BufferAllocator::WriteMapped(camera_buffer_, &ubo, sizeof(ubo));
+    camera_buffer_.WriteMapped(&ubo, sizeof(ubo));
     uploaded_camera_ = ubo;
   }
   if (loaded_signal_ != lattice->ready_signal ||

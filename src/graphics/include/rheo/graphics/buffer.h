@@ -2,22 +2,41 @@
 #define RHEOLBM_BUFFER_H
 
 #include <array>
-#include <cstddef>
-#include <cstring>
-#include <stdexcept>
 #include <vector>
 #include <vulkan/vulkan_raii.hpp>
 
 #include "rheo/graphics/command_pool.h"
 #include "rheo/graphics/device.h"
+#include "rheo/graphics/memory.h"
 
 namespace graphics {
 
-struct AllocatedBuffer {
-  vk::raii::DeviceMemory memory = nullptr;
-  vk::raii::Buffer buffer = nullptr;
-  void* mapped = nullptr;
-} __attribute__((aligned(128)));
+class AllocatedBuffer {
+ public:
+  AllocatedBuffer() = default;
+  ~AllocatedBuffer();
+  AllocatedBuffer(AllocatedBuffer const&) = delete;
+  AllocatedBuffer& operator=(AllocatedBuffer const&) = delete;
+  AllocatedBuffer(AllocatedBuffer&& other) noexcept;
+  AllocatedBuffer& operator=(AllocatedBuffer&& other) noexcept;
+
+  [[nodiscard]] vk::raii::Buffer const& Buffer() const { return buffer_; }
+  [[nodiscard]] void* Mapped(vk::DeviceSize size) const;
+  void WriteMapped(void const* data, vk::DeviceSize size) const;
+  void Flush(vk::DeviceSize size) const;
+  [[nodiscard]] void const* ReadMapped(vk::DeviceSize size) const;
+
+ private:
+  friend class BufferAllocator;
+  void Swap(AllocatedBuffer& other) noexcept;
+  void CheckMappedRange(vk::DeviceSize size) const;
+
+  VmaAllocation allocation_ = nullptr;
+  vk::raii::Buffer buffer_ = nullptr;
+  void* mapped_ = nullptr;
+  VmaAllocator allocator_ = nullptr;
+  vk::DeviceSize size_ = 0;
+};
 
 class BufferAllocator {
  public:
@@ -27,16 +46,6 @@ class BufferAllocator {
 
   [[nodiscard]] static AllocatedBuffer CreateMappedUniformBuffer(
       graphics::Device const& device, vk::DeviceSize size);
-
-  static void WriteMapped(AllocatedBuffer const& buffer, void const* data,
-                          vk::DeviceSize size) {
-    if (buffer.mapped == nullptr) {
-      throw std::runtime_error(
-          "[ERROR] Graphics: tried writing to an unmapped buffer");
-    }
-    std::memcpy(static_cast<std::byte*>(buffer.mapped), data,
-                static_cast<size_t>(size));
-  }
 
   template <typename T>
   [[nodiscard]] static graphics::AllocatedBuffer CreateUniformBuffer(

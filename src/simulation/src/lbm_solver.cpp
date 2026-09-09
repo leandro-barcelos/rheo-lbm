@@ -95,17 +95,17 @@ void LbmSolver::Initialize(graphics::Device const& device,
 
   for (std::uint32_t read = 0; read < 2; ++read) {
     std::array infos = {
-        vk::DescriptorBufferInfo{*lattice.buffer, 0, count * sizeof(Cell)},
-        vk::DescriptorBufferInfo{*momentum_[read].buffer, 0,
+        vk::DescriptorBufferInfo{*lattice.Buffer(), 0, count * sizeof(Cell)},
+        vk::DescriptorBufferInfo{*momentum_[read].Buffer(), 0,
                                  distribution_bytes},
-        vk::DescriptorBufferInfo{*momentum_[1U - read].buffer, 0,
+        vk::DescriptorBufferInfo{*momentum_[1U - read].Buffer(), 0,
                                  distribution_bytes},
-        vk::DescriptorBufferInfo{*after_collision_.buffer, 0,
+        vk::DescriptorBufferInfo{*after_collision_.Buffer(), 0,
                                  distribution_bytes},
-        vk::DescriptorBufferInfo{*next_mass_.buffer, 0, scalar_bytes},
-        vk::DescriptorBufferInfo{*transition_mask_.buffer, 0,
+        vk::DescriptorBufferInfo{*next_mass_.Buffer(), 0, scalar_bytes},
+        vk::DescriptorBufferInfo{*transition_mask_.Buffer(), 0,
                                  count * sizeof(std::uint32_t)},
-        vk::DescriptorBufferInfo{*excess_.buffer, 0, distribution_bytes}};
+        vk::DescriptorBufferInfo{*excess_.Buffer(), 0, distribution_bytes}};
     std::array<vk::WriteDescriptorSet, kBindingCount> writes{};
     for (std::uint32_t binding = 0; binding < kBindingCount; ++binding)
       writes[binding] = {.dstSet = *descriptors_[read],

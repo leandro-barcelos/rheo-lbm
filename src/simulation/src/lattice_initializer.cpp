@@ -36,11 +36,10 @@ graphics::AllocatedBuffer LatticeInitializer::Build(
       device, elevation_bytes, vk::BufferUsageFlagBits::eStorageBuffer,
       vk::MemoryPropertyFlagBits::eHostVisible |
           vk::MemoryPropertyFlagBits::eHostCoherent);
-  auto* mapped =
-      static_cast<float*>(elevations.memory.mapMemory(0, elevation_bytes));
+  auto* mapped = static_cast<float*>(elevations.Mapped(elevation_bytes));
   for (std::size_t i = 0; i < dem.samples.size(); ++i)
     mapped[i] = dem.samples[i].elevation;
-  elevations.memory.unmapMemory();
+  elevations.Flush(elevation_bytes);
   auto lattice = graphics::BufferAllocator::CreateBuffer(
       device, bytes,
       vk::BufferUsageFlagBits::eStorageBuffer |
@@ -108,13 +107,14 @@ graphics::AllocatedBuffer LatticeInitializer::Build(
                     .front());
   std::array infos = {
       vk::DescriptorBufferInfo{
-          .buffer = *compact.buffer,
+          .buffer = *compact.Buffer(),
           .offset = 0,
           .range = vk::DeviceSize(definition.cell_count) * 4},
+      vk::DescriptorBufferInfo{.buffer = *elevations.Buffer(),
+                               .offset = 0,
+                               .range = elevation_bytes},
       vk::DescriptorBufferInfo{
-          .buffer = *elevations.buffer, .offset = 0, .range = elevation_bytes},
-      vk::DescriptorBufferInfo{
-          .buffer = *lattice.buffer, .offset = 0, .range = bytes}};
+          .buffer = *lattice.Buffer(), .offset = 0, .range = bytes}};
   std::array writes = {vk::WriteDescriptorSet{
                            .dstSet = *descriptor,
                            .dstBinding = 0,
@@ -167,10 +167,9 @@ graphics::AllocatedBuffer LatticeInitializer::Build(
                         .pSignalSemaphores = &*sync.Semaphore()};
   device.ComputeQueue().submit(submit, nullptr);
   sync.WaitSemaphore(device, ready_signal);
-  auto* result = static_cast<std::uint32_t*>(
-      compact.memory.mapMemory(0, vk::DeviceSize(definition.cell_count) * 4));
+  auto const* result = static_cast<std::uint32_t const*>(
+      compact.ReadMapped(vk::DeviceSize(definition.cell_count) * 4));
   types.assign(result, result + definition.cell_count);
-  compact.memory.unmapMemory();
   return lattice;
 }
 }  // namespace simulation

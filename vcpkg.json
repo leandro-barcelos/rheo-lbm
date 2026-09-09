@@ -1,11 +1,12 @@
 {
   "dependencies": [
     "gdal",
-    "openssl",
     "glfw3",
     "glm",
+    "openssl",
     "shader-slang",
+    "vulkan-validationlayers",
     "yaml-cpp",
-    "vulkan-validationlayers"
+    "vulkan-memory-allocator"
   ]
 }

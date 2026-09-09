@@ -29,7 +29,7 @@ std::vector<simulation::Cell> Read(
   command.begin({.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
   command.copyBuffer(vk::Buffer(reinterpret_cast<VkBuffer>(
                          snapshot.lattice_buffer.native_handle)),
-                     *buffer.buffer, vk::BufferCopy(0, 0, size));
+                     *buffer.Buffer(), vk::BufferCopy(0, 0, size));
   vk::MemoryBarrier2 barrier{
       .srcStageMask = vk::PipelineStageFlagBits2::eTransfer,
       .srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
@@ -57,9 +57,8 @@ std::vector<simulation::Cell> Read(
       nullptr);
   sync.WaitSemaphore(device, signal);
   auto const* data =
-      static_cast<simulation::Cell const*>(buffer.memory.mapMemory(0, size));
+      static_cast<simulation::Cell const*>(buffer.ReadMapped(size));
   std::vector<simulation::Cell> result(data, data + snapshot.cell_count);
-  buffer.memory.unmapMemory();
   return result;
 }
 std::vector<float> ReadMomentum(
@@ -80,7 +79,7 @@ std::vector<float> ReadMomentum(
   command.begin({.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
   command.copyBuffer(vk::Buffer(reinterpret_cast<VkBuffer>(
                          snapshot.momentum_buffer.native_handle)),
-                     *buffer.buffer, vk::BufferCopy(0, 0, size));
+                     *buffer.Buffer(), vk::BufferCopy(0, 0, size));
   command.end();
   auto signal = sync.GetNextTimelineValue();
   vk::TimelineSemaphoreSubmitInfo timeline{
@@ -100,9 +99,8 @@ std::vector<float> ReadMomentum(
                      .pSignalSemaphores = &*sync.Semaphore()},
       nullptr);
   sync.WaitSemaphore(device, signal);
-  auto* data = static_cast<float*>(buffer.memory.mapMemory(0, size));
+  auto* data = static_cast<float const*>(buffer.ReadMapped(size));
   std::vector<float> result(data, data + snapshot.momentum_count);
-  buffer.memory.unmapMemory();
   return result;
 }
 int main() {

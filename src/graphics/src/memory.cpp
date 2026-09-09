@@ -1,21 +1,40 @@
 #include "rheo/graphics/memory.h"
 
+#include <algorithm>
+#include <format>
 #include <stdexcept>
 
-uint32_t graphics::MemoryAllocator::FindMemoryType(
-    graphics::Device const& device, uint32_t type_filter,
-    vk::MemoryPropertyFlags properties) {
-  vk::PhysicalDeviceMemoryProperties mem_properties =
-      device.PhysicalDevice().getMemoryProperties();
+#include "rheo/graphics/context.h"
+#include "rheo/graphics/device.h"
 
-  for (uint32_t i = 0; i < mem_properties.memoryTypeCount; i++) {
-    if (((type_filter & (1 << i)) != 0U) &&
-        (mem_properties.memoryTypes.at(i).propertyFlags & properties) ==
-            properties) {
-      return i;
-    }
+graphics::MemoryAllocator::~MemoryAllocator() {
+  if (allocator_ != nullptr) {
+    vmaDestroyAllocator(allocator_);
   }
+}
 
-  throw std::runtime_error(
-      "[ERROR] Vulkan: failed to find suitable memory type!");
+void graphics::MemoryAllocator::Init(graphics::GraphicsContext const& context,
+                                     graphics::Device const& device) {
+  if (allocator_ != nullptr) {
+    throw std::logic_error("[ERROR] Graphics: allocator already initialized");
+  }
+  VmaVulkanFunctions functions{};
+  functions.vkGetInstanceProcAddr =
+      context.Context().getDispatcher()->vkGetInstanceProcAddr;
+  functions.vkGetDeviceProcAddr =
+      context.Instance().getDispatcher()->vkGetDeviceProcAddr;
+  VmaAllocatorCreateInfo create_info{
+      .physicalDevice = *device.PhysicalDevice(),
+      .device = *device.LogicalDevice(),
+      .pVulkanFunctions = &functions,
+      .instance = *context.Instance(),
+      .vulkanApiVersion =
+          std::min(VK_API_VERSION_1_4,
+                   device.PhysicalDevice().getProperties().apiVersion),
+  };
+  auto result = vmaCreateAllocator(&create_info, &allocator_);
+  if (result != VK_SUCCESS) {
+    throw std::runtime_error(std::format(
+        "[ERROR] Graphics: failed to create VMA allocator ({})", int(result)));
+  }
 }

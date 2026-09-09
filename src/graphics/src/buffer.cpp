@@ -2,6 +2,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
+#include <format>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -9,9 +11,83 @@
 #include "rheo/graphics/immediate_submit.h"
 #include "rheo/graphics/memory.h"
 
+graphics::AllocatedBuffer::~AllocatedBuffer() {
+  if (allocator_ != nullptr) {
+    vmaDestroyBuffer(allocator_, static_cast<VkBuffer>(buffer_.release()),
+                     allocation_);
+  }
+}
+
+graphics::AllocatedBuffer::AllocatedBuffer(AllocatedBuffer&& other) noexcept {
+  Swap(other);
+}
+
+graphics::AllocatedBuffer& graphics::AllocatedBuffer::operator=(
+    AllocatedBuffer&& other) noexcept {
+  if (this != &other) {
+    AllocatedBuffer previous(std::move(other));
+    Swap(previous);
+  }
+  return *this;
+}
+
+void graphics::AllocatedBuffer::Swap(AllocatedBuffer& other) noexcept {
+  std::swap(allocator_, other.allocator_);
+  std::swap(allocation_, other.allocation_);
+  buffer_.swap(other.buffer_);
+  std::swap(mapped_, other.mapped_);
+  std::swap(size_, other.size_);
+}
+
+void graphics::AllocatedBuffer::CheckMappedRange(vk::DeviceSize size) const {
+  if ((mapped_ == nullptr) || size > size_) {
+    throw std::runtime_error("[ERROR] Graphics: invalid mapped buffer range");
+  }
+}
+
+void graphics::AllocatedBuffer::Flush(vk::DeviceSize size) const {
+  CheckMappedRange(size);
+  auto result = vmaFlushAllocation(allocator_, allocation_, 0, size);
+  if (result != VK_SUCCESS) {
+    throw std::runtime_error(std::format(
+        "[ERROR] Graphics: failed to flush buffer ({})", int(result)));
+  }
+}
+
+void const* graphics::AllocatedBuffer::ReadMapped(vk::DeviceSize size) const {
+  CheckMappedRange(size);
+  auto result = vmaInvalidateAllocation(allocator_, allocation_, 0, size);
+  if (result != VK_SUCCESS) {
+    throw std::runtime_error(std::format(
+        "[ERROR] Graphics: failed to invalidate buffer ({})", int(result)));
+  }
+  return mapped_;
+}
+
+void* graphics::AllocatedBuffer::Mapped(vk::DeviceSize size) const {
+  CheckMappedRange(size);
+  return mapped_;
+}
+
+void graphics::AllocatedBuffer::WriteMapped(void const* data,
+                                            vk::DeviceSize size) const {
+  CheckMappedRange(size);
+  if ((data == nullptr) && (size != 0U)) {
+    throw std::invalid_argument("[ERROR] Graphics: null buffer upload data");
+  }
+  if (size != 0U) {
+    std::memcpy(mapped_, data, static_cast<std::size_t>(size));
+  }
+  Flush(size);
+}
+
 graphics::AllocatedBuffer graphics::BufferAllocator::CreateBuffer(
     graphics::Device const& device, vk::DeviceSize size,
     vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties) {
+  if (size == 0) {
+    throw std::invalid_argument(
+        "[ERROR] Graphics: buffer size must be positive");
+  }
   std::vector<uint32_t> queue_family_indices{device.ComputeQueueFamilyIndex(),
                                              device.GraphicsQueueFamilyIndex()};
 
@@ -26,29 +102,38 @@ graphics::AllocatedBuffer graphics::BufferAllocator::CreateBuffer(
       .pQueueFamilyIndices = queue_family_indices.data(),
   };
 
-  vk::raii::Buffer buffer{device.LogicalDevice(), buffer_info};
-  vk::MemoryRequirements mem_requirements = buffer.getMemoryRequirements();
-  vk::MemoryAllocateInfo alloc_info{
-      .allocationSize = mem_requirements.size,
-      .memoryTypeIndex = MemoryAllocator::FindMemoryType(
-          device, mem_requirements.memoryTypeBits, properties)};
-  vk::raii::DeviceMemory memory{device.LogicalDevice(), alloc_info};
-  buffer.bindMemory(memory, 0);
-
-  return graphics::AllocatedBuffer{
-      .memory = std::move(memory),
-      .buffer = std::move(buffer),
+  VmaAllocationCreateInfo alloc_info{
+      .usage = VMA_MEMORY_USAGE_AUTO,
+      .requiredFlags = static_cast<VkMemoryPropertyFlags>(properties),
   };
+  if (properties & vk::MemoryPropertyFlagBits::eHostVisible) {
+    alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT |
+                       VMA_ALLOCATION_CREATE_MAPPED_BIT;
+  }
+
+  AllocatedBuffer result;
+  result.allocator_ = device.Allocator();
+  result.size_ = size;
+  VkBuffer raw_buffer = VK_NULL_HANDLE;
+  VmaAllocationInfo allocation_info{};
+  auto status = vmaCreateBuffer(
+      result.allocator_,
+      reinterpret_cast<VkBufferCreateInfo const*>(&buffer_info), &alloc_info,
+      &raw_buffer, &result.allocation_, &allocation_info);
+  if (status != VK_SUCCESS) {
+    throw std::runtime_error(std::format(
+        "[ERROR] Graphics: failed to allocate buffer ({})", int(status)));
+  }
+  result.buffer_ = vk::raii::Buffer(device.LogicalDevice(), raw_buffer);
+  result.mapped_ = allocation_info.pMappedData;
+  return result;
 }
 
 graphics::AllocatedBuffer graphics::BufferAllocator::CreateMappedUniformBuffer(
     graphics::Device const& device, vk::DeviceSize size) {
-  auto uniform_buffer =
-      CreateBuffer(device, size, vk::BufferUsageFlagBits::eUniformBuffer,
-                   vk::MemoryPropertyFlagBits::eHostVisible |
-                       vk::MemoryPropertyFlagBits::eHostCoherent);
-  uniform_buffer.mapped = uniform_buffer.memory.mapMemory(0, size);
-  return uniform_buffer;
+  return CreateBuffer(device, size, vk::BufferUsageFlagBits::eUniformBuffer,
+                      vk::MemoryPropertyFlagBits::eHostVisible |
+                          vk::MemoryPropertyFlagBits::eHostCoherent);
 }
 
 graphics::AllocatedBuffer graphics::BufferAllocator::CreateUniformBufferBytes(
@@ -59,9 +144,7 @@ graphics::AllocatedBuffer graphics::BufferAllocator::CreateUniformBufferBytes(
                    vk::MemoryPropertyFlagBits::eHostVisible |
                        vk::MemoryPropertyFlagBits::eHostCoherent);
 
-  void* data_staging = staging_buffer.memory.mapMemory(0, buffer_size);
-  std::memcpy(data_staging, data, static_cast<size_t>(buffer_size));
-  staging_buffer.memory.unmapMemory();
+  staging_buffer.WriteMapped(data, buffer_size);
 
   graphics::AllocatedBuffer storage_buffer =
       CreateBuffer(device, buffer_size,
@@ -90,14 +173,11 @@ graphics::BufferAllocator::CreateStorageBuffers(
                    vk::MemoryPropertyFlagBits::eHostVisible |
                        vk::MemoryPropertyFlagBits::eHostCoherent);
 
-  void* data_staging = staging_buffer.memory.mapMemory(0, size);
-  std::memcpy(data_staging, data, static_cast<size_t>(size));
-  staging_buffer.memory.unmapMemory();
+  staging_buffer.WriteMapped(data, size);
 
   std::array<graphics::AllocatedBuffer, 2> storage_buffers;
   for (size_t i = 0; i < 2; i++) {
     if (i == 1 && !double_buffering) {
-      storage_buffers.at(i) = {.memory = nullptr, .buffer = nullptr};
       continue;
     }
 

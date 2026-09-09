@@ -71,15 +71,15 @@ std::uint64_t LatticeEditor::Apply(graphics::Device const& device,
     changes_ = std::move(next);
     capacity_ = changes.size();
   }
-  auto* mapped = static_cast<glm::uvec2*>(
-      changes_.memory.mapMemory(0, changes.size() * 8));
+  auto* mapped = static_cast<glm::uvec2*>(changes_.Mapped(changes.size() * 8));
   for (std::size_t i = 0; i < changes.size(); ++i)
     mapped[i] = {changes[i].index, changes[i].after};
-  changes_.memory.unmapMemory();
+  changes_.Flush(changes.size() * 8);
   std::array infos = {
-      vk::DescriptorBufferInfo{
-          .buffer = *changes_.buffer, .offset = 0, .range = changes.size() * 8},
-      vk::DescriptorBufferInfo{.buffer = *lattice.buffer,
+      vk::DescriptorBufferInfo{.buffer = *changes_.Buffer(),
+                               .offset = 0,
+                               .range = changes.size() * 8},
+      vk::DescriptorBufferInfo{.buffer = *lattice.Buffer(),
                                .offset = 0,
                                .range = vk::DeviceSize(count) * sizeof(Cell)}};
   std::array writes = {vk::WriteDescriptorSet{

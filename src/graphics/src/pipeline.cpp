@@ -1,5 +1,6 @@
 #include "rheo/graphics/pipeline.h"
 
+#include <filesystem>
 #include <fstream>
 #include <vulkan/vulkan_raii.hpp>
 
@@ -19,10 +20,14 @@ vk::raii::ShaderModule CreateShaderModule(graphics::Device const& device,
 }
 
 std::vector<char> ReadFile(const std::string& filename) {
-  std::ifstream file(filename, std::ios::ate | std::ios::binary);
+  // Shader paths are relative to the build tree, regardless of the launch
+  // directory.
+  auto const path = std::filesystem::path(RHEO_SHADER_BASE_DIR) / filename;
+  std::ifstream file(path, std::ios::ate | std::ios::binary);
 
   if (!file.is_open()) {
-    throw std::runtime_error("[ERROR] IO: failed to open file " + filename);
+    throw std::runtime_error("[ERROR] IO: failed to open file " +
+                             path.string());
   }
 
   std::vector<char> buffer(file.tellg());

@@ -9,7 +9,7 @@
 
 #include "camera.h"
 #include "lattice_renderer.h"
-#include "rheo/graphics/memory.h"
+#include "rheo/graphics/images.h"
 
 namespace renderer {
 
@@ -110,7 +110,7 @@ class Renderer::Impl {
         .newLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
         .srcQueueFamilyIndex = vk::QueueFamilyIgnored,
         .dstQueueFamilyIndex = vk::QueueFamilyIgnored,
-        .image = *depth_image_,
+        .image = *depth_.Image(),
         .subresourceRange = {.aspectMask = vk::ImageAspectFlagBits::eDepth,
                              .baseMipLevel = 0,
                              .levelCount = 1,
@@ -120,7 +120,7 @@ class Renderer::Impl {
         {.imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &depth_barrier});
     depth_initialized_ = true;
     vk::RenderingAttachmentInfo depth_attachment{
-        .imageView = *depth_view_,
+        .imageView = *depth_.ImageView(),
         .imageLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
         .loadOp = vk::AttachmentLoadOp::eClear,
         .storeOp = vk::AttachmentStoreOp::eDontCare,
@@ -196,16 +196,12 @@ class Renderer::Impl {
   void Shutdown() {
     lattice_renderer_.Shutdown();
     command_buffer_ = nullptr;
-    depth_view_ = nullptr;
-    depth_image_ = nullptr;
-    depth_memory_ = nullptr;
+    depth_ = {};
   }
 
  private:
   void CreateDepth(graphics::Device const& device, vk::Extent2D extent) {
-    depth_view_ = nullptr;
-    depth_image_ = nullptr;
-    depth_memory_ = nullptr;
+    depth_ = {};
     depth_initialized_ = false;
     for (auto format : {vk::Format::eD32Sfloat, vk::Format::eD16Unorm}) {
       if (device.PhysicalDevice()
@@ -218,35 +214,8 @@ class Renderer::Impl {
     }
     if (depth_format_ == vk::Format::eUndefined)
       throw std::runtime_error("No supported depth format");
-    depth_image_ = vk::raii::Image(
-        device.LogicalDevice(),
-        {.imageType = vk::ImageType::e2D,
-         .format = depth_format_,
-         .extent = {extent.width, extent.height, 1},
-         .mipLevels = 1,
-         .arrayLayers = 1,
-         .samples = vk::SampleCountFlagBits::e1,
-         .tiling = vk::ImageTiling::eOptimal,
-         .usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
-         .sharingMode = vk::SharingMode::eExclusive});
-    auto requirements = depth_image_.getMemoryRequirements();
-    depth_memory_ = vk::raii::DeviceMemory(
-        device.LogicalDevice(),
-        {.allocationSize = requirements.size,
-         .memoryTypeIndex = graphics::MemoryAllocator::FindMemoryType(
-             device, requirements.memoryTypeBits,
-             vk::MemoryPropertyFlagBits::eDeviceLocal)});
-    depth_image_.bindMemory(depth_memory_, 0);
-    depth_view_ = vk::raii::ImageView(
-        device.LogicalDevice(),
-        {.image = *depth_image_,
-         .viewType = vk::ImageViewType::e2D,
-         .format = depth_format_,
-         .subresourceRange = {.aspectMask = vk::ImageAspectFlagBits::eDepth,
-                              .baseMipLevel = 0,
-                              .levelCount = 1,
-                              .baseArrayLayer = 0,
-                              .layerCount = 1}});
+    depth_ = graphics::ImageAllocator::CreateDepthImage(device, extent,
+                                                        depth_format_);
   }
 
   void RecreateSwapChain(graphics::Device const& device,
@@ -286,9 +255,7 @@ class Renderer::Impl {
     command_buffer_.pipelineBarrier2(dependency);
   }
 
-  vk::raii::DeviceMemory depth_memory_ = nullptr;
-  vk::raii::Image depth_image_ = nullptr;
-  vk::raii::ImageView depth_view_ = nullptr;
+  graphics::AllocatedImage depth_;
   vk::Format depth_format_ = vk::Format::eUndefined;
   bool depth_initialized_ = false;
   domain::SharedDem framed_dem_;

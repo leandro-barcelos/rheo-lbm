@@ -1,7 +1,7 @@
 #include "rheo/graphics/images.h"
 
 #include <array>
-#include <cstring>
+#include <format>
 #include <stdexcept>
 #include <utility>
 
@@ -9,9 +9,58 @@
 #include "rheo/graphics/immediate_submit.h"
 #include "rheo/graphics/memory.h"
 
-namespace {
+graphics::AllocatedImage::~AllocatedImage() {
+  image_view_.clear();
+  sampler_.clear();
+  if (allocator_ != nullptr) {
+    vmaDestroyImage(allocator_, static_cast<VkImage>(image_.release()),
+                    allocation_);
+  }
+}
 
-graphics::AllocatedImage UploadImage(
+graphics::AllocatedImage::AllocatedImage(AllocatedImage&& other) noexcept {
+  Swap(other);
+}
+
+graphics::AllocatedImage& graphics::AllocatedImage::operator=(
+    AllocatedImage&& other) noexcept {
+  if (this != &other) {
+    AllocatedImage previous(std::move(other));
+    Swap(previous);
+  }
+  return *this;
+}
+
+void graphics::AllocatedImage::Swap(AllocatedImage& other) noexcept {
+  std::swap(allocator_, other.allocator_);
+  std::swap(allocation_, other.allocation_);
+  image_.swap(other.image_);
+  image_view_.swap(other.image_view_);
+  sampler_.swap(other.sampler_);
+}
+
+graphics::AllocatedImage graphics::ImageAllocator::CreateImage(
+    Device const& device, vk::ImageCreateInfo const& image_info) {
+  VmaAllocationCreateInfo allocation_info{
+      .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+      .requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+  };
+  AllocatedImage result;
+  result.allocator_ = device.Allocator();
+  VkImage raw_image = VK_NULL_HANDLE;
+  auto status = vmaCreateImage(
+      result.allocator_,
+      reinterpret_cast<VkImageCreateInfo const*>(&image_info), &allocation_info,
+      &raw_image, &result.allocation_, nullptr);
+  if (status != VK_SUCCESS) {
+    throw std::runtime_error(std::format(
+        "[ERROR] Graphics: failed to allocate image ({})", int(status)));
+  }
+  result.image_ = vk::raii::Image(device.LogicalDevice(), raw_image);
+  return result;
+}
+
+graphics::AllocatedImage graphics::ImageAllocator::UploadImage(
     graphics::Device const& device, graphics::CommandPools const& command_pools,
     const void* pixels, std::uint32_t width, std::uint32_t height,
     vk::DeviceSize size) {
@@ -23,12 +72,11 @@ graphics::AllocatedImage UploadImage(
       device, size, vk::BufferUsageFlagBits::eTransferSrc,
       vk::MemoryPropertyFlagBits::eHostVisible |
           vk::MemoryPropertyFlagBits::eHostCoherent);
-  void* mapped = staging.memory.mapMemory(0, size);
-  std::memcpy(mapped, pixels, static_cast<std::size_t>(size));
-  staging.memory.unmapMemory();
+  staging.WriteMapped(pixels, size);
 
   const std::array queue_families{device.ComputeQueueFamilyIndex(),
                                   device.GraphicsQueueFamilyIndex()};
+  bool const shared = queue_families[0] != queue_families[1];
   vk::ImageCreateInfo image_info{
       .imageType = vk::ImageType::e2D,
       .format = vk::Format::eR8G8B8A8Unorm,
@@ -39,24 +87,14 @@ graphics::AllocatedImage UploadImage(
       .tiling = vk::ImageTiling::eOptimal,
       .usage = vk::ImageUsageFlagBits::eTransferDst |
                vk::ImageUsageFlagBits::eSampled,
-      .sharingMode = vk::SharingMode::eConcurrent,
+      .sharingMode =
+          shared ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive,
       .queueFamilyIndexCount =
-          static_cast<std::uint32_t>(queue_families.size()),
+          shared ? static_cast<std::uint32_t>(queue_families.size()) : 0U,
       .pQueueFamilyIndices = queue_families.data(),
       .initialLayout = vk::ImageLayout::eUndefined};
 
-  vk::raii::Image vk_image{device.LogicalDevice(), image_info};
-  auto requirements = vk_image.getMemoryRequirements();
-  vk::MemoryAllocateInfo allocation{
-      .allocationSize = requirements.size,
-      .memoryTypeIndex = graphics::MemoryAllocator::FindMemoryType(
-          device, requirements.memoryTypeBits,
-          vk::MemoryPropertyFlagBits::eDeviceLocal)};
-  vk::raii::DeviceMemory memory{device.LogicalDevice(), allocation};
-  vk_image.bindMemory(memory, 0);
-
-  graphics::AllocatedImage result{.memory = std::move(memory),
-                                  .image = std::move(vk_image)};
+  auto result = graphics::ImageAllocator::CreateImage(device, image_info);
   graphics::ImmediateSubmit submit;
   submit.TransitionImageLayout(device, command_pools, result,
                                vk::ImageLayout::eUndefined,
@@ -68,7 +106,7 @@ graphics::AllocatedImage UploadImage(
                                vk::ImageLayout::eShaderReadOnlyOptimal);
 
   vk::ImageViewCreateInfo view_info{
-      .image = result.image,
+      .image = result.Image(),
       .viewType = vk::ImageViewType::e2D,
       .format = vk::Format::eR8G8B8A8Unorm,
       .subresourceRange = {.aspectMask = vk::ImageAspectFlagBits::eColor,
@@ -76,7 +114,7 @@ graphics::AllocatedImage UploadImage(
                            .levelCount = 1,
                            .baseArrayLayer = 0,
                            .layerCount = 1}};
-  result.image_view = vk::raii::ImageView(device.LogicalDevice(), view_info);
+  result.image_view_ = vk::raii::ImageView(device.LogicalDevice(), view_info);
 
   vk::SamplerCreateInfo sampler_info{
       .magFilter = vk::Filter::eLinear,
@@ -88,11 +126,9 @@ graphics::AllocatedImage UploadImage(
       .anisotropyEnable = vk::False,
       .compareEnable = vk::False,
       .compareOp = vk::CompareOp::eAlways};
-  result.sampler = vk::raii::Sampler(device.LogicalDevice(), sampler_info);
+  result.sampler_ = vk::raii::Sampler(device.LogicalDevice(), sampler_info);
   return result;
 }
-
-}  // namespace
 
 graphics::AllocatedImage graphics::ImageAllocator::CreateImage(
     Device const& device, CommandPools const& command_pools,
@@ -109,4 +145,30 @@ graphics::AllocatedImage graphics::ImageAllocator::CreateSolidColorImage(
     std::uint8_t green, std::uint8_t blue, std::uint8_t alpha) {
   std::array<std::uint8_t, 4> const pixel{red, green, blue, alpha};
   return UploadImage(device, command_pools, pixel.data(), 1, 1, pixel.size());
+}
+
+graphics::AllocatedImage graphics::ImageAllocator::CreateDepthImage(
+    Device const& device, vk::Extent2D extent, vk::Format format) {
+  auto result = CreateImage(
+      device,
+      {.imageType = vk::ImageType::e2D,
+       .format = format,
+       .extent = {.width = extent.width, .height = extent.height, .depth = 1},
+       .mipLevels = 1,
+       .arrayLayers = 1,
+       .samples = vk::SampleCountFlagBits::e1,
+       .tiling = vk::ImageTiling::eOptimal,
+       .usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
+       .sharingMode = vk::SharingMode::eExclusive});
+  result.image_view_ = vk::raii::ImageView(
+      device.LogicalDevice(),
+      {.image = *result.image_,
+       .viewType = vk::ImageViewType::e2D,
+       .format = format,
+       .subresourceRange = {.aspectMask = vk::ImageAspectFlagBits::eDepth,
+                            .baseMipLevel = 0,
+                            .levelCount = 1,
+                            .baseArrayLayer = 0,
+                            .layerCount = 1}});
+  return result;
 }

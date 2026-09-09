@@ -5,6 +5,7 @@
 #include <vulkan/vulkan_raii.hpp>
 
 #include "rheo/graphics/context.h"
+#include "rheo/graphics/memory.h"
 
 namespace graphics {
 struct QueueFamilyIndices {
@@ -44,6 +45,10 @@ class Device {
     return device_;
   }
 
+  [[nodiscard]] VmaAllocator Allocator() const {
+    return memory_allocator_.Allocator();
+  }
+
   [[nodiscard]] uint32_t GraphicsQueueFamilyIndex() const {
     return queue_indices_.Graphics().value();
   }
@@ -67,6 +72,7 @@ class Device {
  private:
   vk::raii::PhysicalDevice physical_device_ = nullptr;
   vk::raii::Device device_ = nullptr;
+  MemoryAllocator memory_allocator_;
   QueueFamilyIndices queue_indices_;
   vk::raii::Queue graphics_queue_ = nullptr;
   vk::raii::Queue compute_queue_ = nullptr;

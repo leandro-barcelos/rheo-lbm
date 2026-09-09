@@ -9,7 +9,7 @@ void graphics::ImmediateSubmit::CopyBuffer(
     graphics::AllocatedBuffer const& src_buffer,
     graphics::AllocatedBuffer const& dst_buffer, vk::DeviceSize size) {
   BeginSingleTimeCommands(device, command_pools);
-  command_buffer_.copyBuffer(src_buffer.buffer, dst_buffer.buffer,
+  command_buffer_.copyBuffer(src_buffer.Buffer(), dst_buffer.Buffer(),
                              vk::BufferCopy(0, 0, size));
   EndSingleTimeCommands(device);
 }
@@ -29,7 +29,7 @@ void graphics::ImmediateSubmit::CopyBufferToImage(
                            .layerCount = 1},
       .imageOffset = {.x = 0, .y = 0, .z = 0},
       .imageExtent = {.width = width, .height = height, .depth = 1}};
-  command_buffer_.copyBufferToImage(buffer.buffer, image.image,
+  command_buffer_.copyBufferToImage(buffer.Buffer(), image.Image(),
                                     vk::ImageLayout::eTransferDstOptimal,
                                     {region});
   EndSingleTimeCommands(device);
@@ -44,7 +44,7 @@ void graphics::ImmediateSubmit::TransitionImageLayout(
   vk::ImageMemoryBarrier barrier{
       .oldLayout = old_layout,
       .newLayout = new_layout,
-      .image = image.image,
+      .image = image.Image(),
       .subresourceRange = {.aspectMask = vk::ImageAspectFlagBits::eColor,
                            .baseMipLevel = 0,
                            .levelCount = 1,
