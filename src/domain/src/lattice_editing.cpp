@@ -1,6 +1,6 @@
 #include "rheo/domain/lattice_editing.h"
 
-#include <openssl/evp.h>
+#include "sha256.h"
 
 #include <algorithm>
 #include <array>
@@ -242,17 +242,13 @@ std::vector<CellDelta> Differences(std::span<std::uint8_t const> before,
   return out;
 }
 std::string DemFingerprint(DemData const& dem) {
-  std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> ctx(EVP_MD_CTX_new(),
-                                                              EVP_MD_CTX_free);
-  if (!ctx || EVP_DigestInit_ex(ctx.get(), EVP_sha256(), nullptr) != 1)
-    throw std::runtime_error("Could not initialize DEM fingerprint");
+  detail::Sha256 hash;
   auto word = [&](std::uint32_t value) {
     std::array<unsigned char, 4> bytes{static_cast<unsigned char>(value),
                                        static_cast<unsigned char>(value >> 8),
                                        static_cast<unsigned char>(value >> 16),
                                        static_cast<unsigned char>(value >> 24)};
-    if (EVP_DigestUpdate(ctx.get(), bytes.data(), bytes.size()) != 1)
-      throw std::runtime_error("Could not hash DEM");
+    hash.Update(bytes);
   };
   word(dem.width);
   word(dem.height);
@@ -261,10 +257,7 @@ std::string DemFingerprint(DemData const& dem) {
     word(std::bit_cast<std::uint32_t>(v));
   for (auto const& sample : dem.samples)
     word(std::bit_cast<std::uint32_t>(sample.elevation));
-  std::array<unsigned char, 32> digest{};
-  unsigned size = 0;
-  if (EVP_DigestFinal_ex(ctx.get(), digest.data(), &size) != 1 || size != 32)
-    throw std::runtime_error("Could not finish DEM fingerprint");
+  auto digest = hash.Finish();
   std::string out;
   for (auto b : digest) {
     out += '0';

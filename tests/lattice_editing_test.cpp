@@ -25,6 +25,20 @@ void Set(CellTypes& t, glm::ivec3 p, std::uint8_t type) {
 }
 auto Get(CellTypes const& t, glm::ivec3 p) { return t[CellIndex(p, d)]; }
 int main() {
+  // Preserve the serialized DEM hash used in existing project files.
+  DemData dem;
+  dem.width = 2;
+  dem.height = 2;
+  dem.pixel_size_meters = {1.5F, 2.5F};
+  dem.min_elevation = -2;
+  dem.max_elevation = 7;
+  for (float elevation : {-2.0F, 0.0F, 3.5F, 7.0F}) {
+    Elevation sample{};
+    sample.elevation = elevation;
+    dem.samples.push_back(sample);
+  }
+  Check(DemFingerprint(dem) == "2cf21db61f7bc128cbdd28b5f405f3bcd1cc61865caa9451f27a37412885d72c");
+
   auto t = Base(), base = t;
   auto ray = [](float x, float z) {
     return Ray{{(x + .5F) / 7 - .5F, 2, (z + .5F) / 7 - .5F}, {0, -1, 0}};

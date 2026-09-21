@@ -1,3 +1,7 @@
+add_executable(sha256_test sha256_test.cpp)
+target_include_directories(sha256_test PRIVATE ${PROJECT_SOURCE_DIR}/src/domain/src)
+add_test(NAME sha256_test COMMAND sha256_test)
+
 add_executable(input_queue_test input_queue_test.cpp)
 target_link_libraries(input_queue_test PRIVATE rheo::events)
 add_test(NAME input_queue_test COMMAND input_queue_test)

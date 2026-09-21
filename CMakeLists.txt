@@ -15,7 +15,6 @@ find_package(glm CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
 find_package(yaml-cpp CONFIG REQUIRED)
 find_package(GDAL CONFIG REQUIRED)
-find_package(OpenSSL REQUIRED COMPONENTS Crypto)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 
 add_library(rheo_graphics_backend INTERFACE)

@@ -1,9 +1,21 @@
 {
   "dependencies": [
-    "gdal",
+    {
+      "name": "gdal",
+      "default-features": false,
+      "features": [
+        "expat", "geos", "gif", "hdf5", "iconv", "jpeg", "lerc",
+        "libkml", "libxml2", "lzma",
+        "openjpeg", "pcre2", "png", "qhull", "sqlite3", "webp", "zstd"
+      ]
+    },
     "glfw3",
     "glm",
-    "openssl",
+    {
+      "name": "proj",
+      "default-features": false,
+      "features": ["tiff"]
+    },
     "shader-slang",
     "vulkan-validationlayers",
     "yaml-cpp",
