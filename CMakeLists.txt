@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 4.2)
 project(rheo-lbm)
 
 include(CTest)
+set(RHEO_MODEL "3D" CACHE STRING "Simulation model: 3D or 2D")
+set_property(CACHE RHEO_MODEL PROPERTY STRINGS 3D 2D)
+if(NOT RHEO_MODEL STREQUAL "3D" AND NOT RHEO_MODEL STREQUAL "2D")
+    message(FATAL_ERROR "RHEO_MODEL must be 3D or 2D")
+endif()
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug CACHE STRING "" FORCE)
@@ -13,8 +18,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
-find_package(yaml-cpp CONFIG REQUIRED)
-find_package(GDAL CONFIG REQUIRED)
+if(RHEO_MODEL STREQUAL "3D")
+    find_package(yaml-cpp CONFIG REQUIRED)
+    find_package(GDAL CONFIG REQUIRED)
+endif()
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 
 add_library(rheo_graphics_backend INTERFACE)
@@ -40,9 +47,11 @@ set(IMGUI_SOURCES
     ${IMGUI_DIR}/misc/cpp/imgui_stdlib.cpp
     ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
     ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
-    ${IMGUI_FILE_DIALOG_DIR}/ImGuiFileDialog.cpp
 )
 
+if(RHEO_MODEL STREQUAL "3D")
+    list(APPEND IMGUI_SOURCES ${IMGUI_FILE_DIALOG_DIR}/ImGuiFileDialog.cpp)
+endif()
 add_library(imgui STATIC ${IMGUI_SOURCES})
 
 target_include_directories(
@@ -62,7 +71,9 @@ add_subdirectory(src/domain)
 add_subdirectory(src/events)
 add_subdirectory(src/platform)
 add_subdirectory(src/graphics)
-add_subdirectory(src/assets)
+if(RHEO_MODEL STREQUAL "3D")
+    add_subdirectory(src/assets)
+endif()
 add_subdirectory(src/simulation)
 add_subdirectory(src/application)
 add_subdirectory(src/renderer)
@@ -72,13 +83,17 @@ if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()
 
-add_executable(${PROJECT_NAME} src/main.cpp src/rheo_lbm_app.cpp)
+if(RHEO_MODEL STREQUAL "3D")
+    set(RHEO_APP_SOURCE src/rheo_lbm_app.cpp)
+else()
+    set(RHEO_APP_SOURCE src/rheo_lbm_app_2d.cpp)
+endif()
+add_executable(${PROJECT_NAME} src/main.cpp ${RHEO_APP_SOURCE})
 target_include_directories(${PROJECT_NAME} PRIVATE src)
 target_link_libraries(
     ${PROJECT_NAME}
     PRIVATE
     rheo::application
-    rheo::assets
     rheo::events
     rheo::graphics
     rheo::platform
@@ -86,6 +101,12 @@ target_link_libraries(
     rheo::simulation
     rheo::ui
 )
+
+if(RHEO_MODEL STREQUAL "2D")
+    # The ImGui Vulkan backend embeds the map's visualization shaders.
+    return()
+endif()
+target_link_libraries(${PROJECT_NAME} PRIVATE rheo::assets)
 
 find_program(SLANGC_EXECUTABLE slangc HINTS $ENV{VULKAN_SDK}/bin REQUIRED)
 

@@ -9,6 +9,48 @@
         "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
         "CMAKE_EXPORT_COMPILE_COMMANDS": true
       }
+    },
+    {
+      "name": "vcpkg-3d",
+      "inherits": "vcpkg",
+      "binaryDir": "${sourceDir}/build/3d",
+      "cacheVariables": {
+        "RHEO_MODEL": "3D"
+      }
+    },
+    {
+      "name": "vcpkg-2d",
+      "inherits": "vcpkg",
+      "binaryDir": "${sourceDir}/build/2d",
+      "cacheVariables": {
+        "RHEO_MODEL": "2D"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "vcpkg-3d",
+      "configurePreset": "vcpkg-3d"
+    },
+    {
+      "name": "vcpkg-2d",
+      "configurePreset": "vcpkg-2d"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "vcpkg-3d",
+      "configurePreset": "vcpkg-3d",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "vcpkg-2d",
+      "configurePreset": "vcpkg-2d",
+      "output": {
+        "outputOnFailure": true
+      }
     }
   ]
 }

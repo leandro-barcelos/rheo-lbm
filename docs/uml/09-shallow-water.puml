@@ -1,0 +1,58 @@
+@startuml
+title Modelo 2D — mesmos módulos e ponto de entrada
+left to right direction
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+package "executável" {
+  class "main.cpp" as Main
+  class "rheo::RheoLBMApp" as App
+}
+package domain {
+  class ShallowWaterSettings
+  enum ShallowWaterScenario
+  class ShallowWaterSnapshot
+}
+package simulation {
+  class LabsweSolver
+  class ShallowWaterSession
+}
+package application {
+  class ShallowWaterController
+}
+package renderer {
+  class ShallowWaterRenderer
+  interface IOverlayPass
+}
+package ui {
+  class ShallowWaterInterface
+  class ImGuiLayer
+}
+package "graphics / platform / events\ncompartilhados" as Infrastructure
+
+Main --> App
+App *-- ShallowWaterController
+App *-- ShallowWaterRenderer
+App *-- ShallowWaterInterface
+App --> Infrastructure
+ShallowWaterController *-- ShallowWaterSession
+ShallowWaterSession *-- LabsweSolver
+LabsweSolver --> ShallowWaterSettings
+LabsweSolver --> ShallowWaterSnapshot
+ShallowWaterController --> ShallowWaterScenario
+ShallowWaterInterface --> ShallowWaterController : seleção e execução
+ShallowWaterInterface *-- ImGuiLayer
+ShallowWaterInterface ..|> IOverlayPass
+ShallowWaterInterface --> ShallowWaterRenderer : campos e opções do mapa
+ShallowWaterRenderer --> ShallowWaterSnapshot : leitura
+ShallowWaterRenderer --> Infrastructure : frame Vulkan
+ShallowWaterRenderer --> IOverlayPass : desenho
+
+note bottom of Main
+  src/main.cpp é único.
+  RHEO_MODEL seleciona fontes nos CMakeLists
+  dos módulos e a implementação de RheoLBMApp.
+  simulation e application 2D não dependem de Vulkan.
+end note
+@enduml
