@@ -1,4 +1,4 @@
-#include "lbm_solver.h"
+#include "free_surface_lbm_3d_solver.h"
 
 #include <algorithm>
 #include <array>
@@ -14,7 +14,7 @@ constexpr vk::DeviceSize kDirections = 19;
 constexpr std::uint32_t kBindingCount = 7;
 }  // namespace
 
-void LbmSolver::Initialize(graphics::Device const& device,
+void FreeSurfaceLbm3DSolver::Initialize(graphics::Device const& device,
                            graphics::CommandPools const& pools,
                            graphics::FrameSync& sync,
                            graphics::AllocatedBuffer const& lattice,
@@ -162,7 +162,7 @@ void LbmSolver::Initialize(graphics::Device const& device,
   sync.WaitSemaphore(device, signal);
 }
 
-void LbmSolver::Bind(vk::raii::CommandBuffer const& command,
+void FreeSurfaceLbm3DSolver::Bind(vk::raii::CommandBuffer const& command,
                      vk::raii::Pipeline const& pipeline,
                      std::uint32_t descriptor_index) const {
   command.bindPipeline(vk::PipelineBindPoint::eCompute, *pipeline);
@@ -170,7 +170,7 @@ void LbmSolver::Bind(vk::raii::CommandBuffer const& command,
                              0, {*descriptors_[descriptor_index]}, {});
 }
 
-void LbmSolver::Barrier(vk::raii::CommandBuffer const& command) {
+void FreeSurfaceLbm3DSolver::Barrier(vk::raii::CommandBuffer const& command) {
   vk::MemoryBarrier2 barrier{
       .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
       .srcAccessMask = vk::AccessFlagBits2::eShaderWrite,
@@ -181,7 +181,7 @@ void LbmSolver::Barrier(vk::raii::CommandBuffer const& command) {
       {.memoryBarrierCount = 1, .pMemoryBarriers = &barrier});
 }
 
-void LbmSolver::Record(vk::raii::CommandBuffer const& command,
+void FreeSurfaceLbm3DSolver::Record(vk::raii::CommandBuffer const& command,
                        domain::LbmSettings const& settings, bool initialize) {
   Parameters parameters{
       .shape = {definition_.width, definition_.height, definition_.depth, 0},
@@ -223,7 +223,7 @@ void LbmSolver::Record(vk::raii::CommandBuffer const& command,
   command.end();
 }
 
-std::uint64_t LbmSolver::Submit(graphics::Device const& device,
+std::uint64_t FreeSurfaceLbm3DSolver::Submit(graphics::Device const& device,
                                 graphics::FrameSync& sync,
                                 vk::raii::CommandBuffer const& command,
                                 std::uint64_t wait_signal) {
@@ -248,7 +248,7 @@ std::uint64_t LbmSolver::Submit(graphics::Device const& device,
   return signal;
 }
 
-std::uint64_t LbmSolver::Step(graphics::Device const& device,
+std::uint64_t FreeSurfaceLbm3DSolver::Step(graphics::Device const& device,
                               graphics::FrameSync& sync,
                               graphics::AllocatedBuffer const& lattice,
                               domain::LbmSettings const& settings,
@@ -265,7 +265,7 @@ std::uint64_t LbmSolver::Step(graphics::Device const& device,
   return signal;
 }
 
-std::uint64_t LbmSolver::RemoveDam(graphics::Device const& device,
+std::uint64_t FreeSurfaceLbm3DSolver::RemoveDam(graphics::Device const& device,
                                    graphics::FrameSync& sync,
                                    domain::LbmSettings const& settings,
                                    std::uint64_t wait_signal) {

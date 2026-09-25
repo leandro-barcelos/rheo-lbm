@@ -1,4 +1,6 @@
-#pragma once
+#ifndef RHEO_UI_SHALLOW_WATER_INTERFACE_H
+#define RHEO_UI_SHALLOW_WATER_INTERFACE_H
+
 #include <memory>
 
 #include "rheo/application/shallow_water_controller.h"
@@ -24,3 +26,5 @@ class ShallowWaterInterface final : public renderer::IOverlayPass {
   std::unique_ptr<Impl> impl_;
 };
 }  // namespace ui
+
+#endif  // RHEO_UI_SHALLOW_WATER_INTERFACE_H

@@ -1,4 +1,6 @@
-#pragma once
+#ifndef RHEO_DOMAIN_SHALLOW_WATER_H
+#define RHEO_DOMAIN_SHALLOW_WATER_H
+
 #include <cstdint>
 #include <vector>
 namespace domain {
@@ -35,3 +37,5 @@ inline constexpr const char* ShallowWaterScenarioNames[] = {
 ShallowWaterSettings ShallowWaterParameters(ShallowWaterScenario scenario);
 ShallowWaterSnapshot ShallowWaterInitialState(ShallowWaterScenario scenario);
 }  // namespace domain
+
+#endif  // RHEO_DOMAIN_SHALLOW_WATER_H

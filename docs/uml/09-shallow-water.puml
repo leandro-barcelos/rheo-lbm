@@ -8,6 +8,7 @@ skinparam packageStyle rectangle
 package "executável" {
   class "main.cpp" as Main
   class "rheo::RheoLBMApp" as App
+  class "RunShallowWaterLbm2DApp()" as Run2D
 }
 package domain {
   class ShallowWaterSettings
@@ -15,7 +16,7 @@ package domain {
   class ShallowWaterSnapshot
 }
 package simulation {
-  class LabsweSolver
+  class ShallowWaterLbm2DSolver
   class ShallowWaterSession
 }
 package application {
@@ -31,15 +32,16 @@ package ui {
 }
 package "graphics / platform / events\ncompartilhados" as Infrastructure
 
-Main --> App
-App *-- ShallowWaterController
-App *-- ShallowWaterRenderer
-App *-- ShallowWaterInterface
-App --> Infrastructure
+Main --> App : --model 2d
+App --> Run2D : Run()
+Run2D ..> ShallowWaterController
+Run2D ..> ShallowWaterRenderer
+Run2D ..> ShallowWaterInterface
+Run2D --> Infrastructure
 ShallowWaterController *-- ShallowWaterSession
-ShallowWaterSession *-- LabsweSolver
-LabsweSolver --> ShallowWaterSettings
-LabsweSolver --> ShallowWaterSnapshot
+ShallowWaterSession *-- ShallowWaterLbm2DSolver
+ShallowWaterLbm2DSolver --> ShallowWaterSettings
+ShallowWaterLbm2DSolver --> ShallowWaterSnapshot
 ShallowWaterController --> ShallowWaterScenario
 ShallowWaterInterface --> ShallowWaterController : seleção e execução
 ShallowWaterInterface *-- ImGuiLayer
@@ -51,8 +53,11 @@ ShallowWaterRenderer --> IOverlayPass : desenho
 
 note bottom of Main
   src/main.cpp é único.
-  RHEO_MODEL seleciona fontes nos CMakeLists
-  dos módulos e a implementação de RheoLBMApp.
-  simulation e application 2D não dependem de Vulkan.
+  Os dois modelos são compilados no mesmo executável.
+  --model 2d seleciona este fluxo; o padrão é 3D.
+  Somente o fluxo selecionado cria janela, Vulkan e ImGui.
+  Os controllers continuam separados.
+  Os módulos agregam as dependências dos dois modelos;
+  o solver de águas rasas continua executando na CPU.
 end note
 @enduml

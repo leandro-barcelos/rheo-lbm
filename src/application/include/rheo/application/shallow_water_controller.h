@@ -1,4 +1,6 @@
-#pragma once
+#ifndef RHEO_APPLICATION_SHALLOW_WATER_CONTROLLER_H
+#define RHEO_APPLICATION_SHALLOW_WATER_CONTROLLER_H
+
 #include <chrono>
 #include <memory>
 #include <string>
@@ -35,3 +37,5 @@ class ShallowWaterController {
   std::string error_;
 };
 }  // namespace application
+
+#endif  // RHEO_APPLICATION_SHALLOW_WATER_CONTROLLER_H

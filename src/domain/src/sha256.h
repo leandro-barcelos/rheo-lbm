@@ -1,4 +1,5 @@
-#pragma once
+#ifndef RHEO_DOMAIN_SHA256_H
+#define RHEO_DOMAIN_SHA256_H
 
 #include <array>
 #include <bit>
@@ -92,3 +93,5 @@ class Sha256 {
 };
 
 }  // namespace domain::detail
+
+#endif // RHEO_DOMAIN_SHA256_H

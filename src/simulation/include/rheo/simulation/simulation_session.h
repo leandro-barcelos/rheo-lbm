@@ -63,15 +63,15 @@ class ISimulationSession {
   [[nodiscard]] virtual bool IsReady() const = 0;
 };
 
-class SimulationSession final : public ISimulationSession {
+class FreeSurfaceLbm3DSession final : public ISimulationSession {
  public:
-  SimulationSession(graphics::Device const& device,
+  FreeSurfaceLbm3DSession(graphics::Device const& device,
                     graphics::CommandPools const& command_pools,
                     graphics::FrameSync& frame_sync);
-  ~SimulationSession() override;
+  ~FreeSurfaceLbm3DSession() override;
 
-  SimulationSession(SimulationSession const&) = delete;
-  SimulationSession& operator=(SimulationSession const&) = delete;
+  FreeSurfaceLbm3DSession(FreeSurfaceLbm3DSession const&) = delete;
+  FreeSurfaceLbm3DSession& operator=(FreeSurfaceLbm3DSession const&) = delete;
 
   std::expected<void, std::string> InitializeTerrain(
       domain::SharedDem dem, domain::LatticeSettings settings,

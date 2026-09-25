@@ -1,4 +1,6 @@
-#pragma once
+#ifndef RHEO_SIMULATION_SHALLOW_WATER_LBM_2D_SOLVER_H
+#define RHEO_SIMULATION_SHALLOW_WATER_LBM_2D_SOLVER_H
+
 #include <array>
 #include <cstdint>
 #include <vector>
@@ -12,9 +14,9 @@ inline constexpr int kVelocityVectorY[9] = {0, 0, 1, 1, 1, 0, -1, -1, -1};
 using domain::Boundary;
 using domain::ShallowWaterSettings;
 using domain::ShallowWaterSnapshot;
-class LabsweSolver {
+class ShallowWaterLbm2DSolver {
  public:
-  explicit LabsweSolver(ShallowWaterSettings settings);
+  explicit ShallowWaterLbm2DSolver(ShallowWaterSettings settings);
   void Initialize(ShallowWaterSnapshot state);
   void Step();
   void Run(int steps);
@@ -31,3 +33,5 @@ class LabsweSolver {
   std::vector<double> gradient_x_, gradient_y_;
 };
 }  // namespace simulation
+
+#endif  //  RHEO_SIMULATION_SHALLOW_WATER_LBM_2D_SOLVER_H

@@ -1,4 +1,6 @@
-#pragma once
+#ifndef RHEO_RENDERER_SHALLOW_WATER_RENDERER_H
+#define RHEO_RENDERER_SHALLOW_WATER_RENDERER_H
+
 #include <memory>
 
 #include "rheo/domain/shallow_water.h"
@@ -29,3 +31,5 @@ class ShallowWaterRenderer {
   std::unique_ptr<Impl> impl_;
 };
 }  // namespace renderer
+
+#endif // RHEO_RENDERER_SHALLOW_WATER_RENDERER_H

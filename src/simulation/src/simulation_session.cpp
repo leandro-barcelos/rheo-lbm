@@ -7,9 +7,9 @@
 
 #include "lattice_editor.h"
 #include "lattice_initializer.h"
-#include "lbm_solver.h"
+#include "free_surface_lbm_3d_solver.h"
 namespace simulation {
-class SimulationSession::Impl {
+class FreeSurfaceLbm3DSession::Impl {
  public:
   Impl(graphics::Device const& device, graphics::CommandPools const& pools,
        graphics::FrameSync& sync)
@@ -153,7 +153,7 @@ class SimulationSession::Impl {
     }
     try {
       history_.End(types_);
-      auto solver = std::make_unique<LbmSolver>();
+      auto solver = std::make_unique<FreeSurfaceLbm3DSolver>();
       solver->Initialize(device_, pools_, sync_, lattice_buffer_, *definition_,
                          settings, snapshot_->ready_signal);
       solver_ = std::move(solver);
@@ -231,7 +231,7 @@ class SimulationSession::Impl {
   std::uint64_t physical_steps_ = 0;
   std::uint32_t dam_count_ = 0;
   double step_elapsed_ms_ = 0;
-  std::unique_ptr<LbmSolver> solver_;
+  std::unique_ptr<FreeSurfaceLbm3DSolver> solver_;
   domain::EditHistory history_;
   LatticeEditor editor_;
   graphics::Device const& device_;
@@ -240,17 +240,17 @@ class SimulationSession::Impl {
   graphics::AllocatedBuffer lattice_buffer_;
   std::optional<LatticeRenderSnapshot> snapshot_;
 };
-SimulationSession::SimulationSession(graphics::Device const& device,
+FreeSurfaceLbm3DSession::FreeSurfaceLbm3DSession(graphics::Device const& device,
                                      graphics::CommandPools const& pools,
                                      graphics::FrameSync& sync)
     : impl_(std::make_unique<Impl>(device, pools, sync)) {}
-SimulationSession::~SimulationSession() = default;
-std::expected<void, std::string> SimulationSession::InitializeTerrain(
+FreeSurfaceLbm3DSession::~FreeSurfaceLbm3DSession() = default;
+std::expected<void, std::string> FreeSurfaceLbm3DSession::InitializeTerrain(
     domain::SharedDem dem, domain::LatticeSettings settings,
     std::optional<domain::LatticeEdits> const& edits) {
   return impl_->InitializeTerrain(std::move(dem), settings, edits);
 }
-EditState SimulationSession::Editing() const {
+EditState FreeSurfaceLbm3DSession::Editing() const {
   auto types = impl_->state_ == SimulationState::kEditing
                    ? std::span<std::uint8_t const>(impl_->types_)
                    : std::span<std::uint8_t const>{};
@@ -258,46 +258,46 @@ EditState SimulationSession::Editing() const {
           impl_->min_elevation_,     impl_->changed_,
           impl_->history_.CanUndo(), impl_->history_.CanRedo()};
 }
-void SimulationSession::BeginStroke() {
+void FreeSurfaceLbm3DSession::BeginStroke() {
   if (impl_->state_ == SimulationState::kEditing) impl_->history_.Begin();
 }
-void SimulationSession::EndStroke() {
+void FreeSurfaceLbm3DSession::EndStroke() {
   if (impl_->state_ == SimulationState::kEditing)
     impl_->history_.End(impl_->types_);
 }
-std::expected<void, std::string> SimulationSession::Edit(
+std::expected<void, std::string> FreeSurfaceLbm3DSession::Edit(
     EditOperation const& op) {
   return impl_->Edit(op);
 }
-std::optional<domain::LatticeEdits> SimulationSession::ExportEdits() const {
+std::optional<domain::LatticeEdits> FreeSurfaceLbm3DSession::ExportEdits() const {
   if (!impl_->definition_) return {};
   return domain::ExportEdits(impl_->fingerprint_, *impl_->definition_,
                              impl_->base_, impl_->types_);
 }
-void SimulationSession::Clear() { impl_->Clear(); }
-std::expected<void, std::string> SimulationSession::Play(
+void FreeSurfaceLbm3DSession::Clear() { impl_->Clear(); }
+std::expected<void, std::string> FreeSurfaceLbm3DSession::Play(
     domain::LbmSettings const& settings) {
   return impl_->Play(settings);
 }
-void SimulationSession::Pause() { impl_->Pause(); }
-std::expected<void, std::string> SimulationSession::ResetToTerrain() {
+void FreeSurfaceLbm3DSession::Pause() { impl_->Pause(); }
+std::expected<void, std::string> FreeSurfaceLbm3DSession::ResetToTerrain() {
   return impl_->ResetToTerrain();
 }
-std::expected<void, std::string> SimulationSession::RemoveDam() {
+std::expected<void, std::string> FreeSurfaceLbm3DSession::RemoveDam() {
   return impl_->RemoveDam();
 }
-bool SimulationSession::IsRunning() const {
+bool FreeSurfaceLbm3DSession::IsRunning() const {
   return impl_->state_ == SimulationState::kRunning;
 }
-SimulationState SimulationSession::State() const { return impl_->state_; }
-std::uint64_t SimulationSession::PhysicalStepCount() const {
+SimulationState FreeSurfaceLbm3DSession::State() const { return impl_->state_; }
+std::uint64_t FreeSurfaceLbm3DSession::PhysicalStepCount() const {
   return impl_->physical_steps_;
 }
-bool SimulationSession::CanRemoveDam() const {
+bool FreeSurfaceLbm3DSession::CanRemoveDam() const {
   return impl_->state_ == SimulationState::kRunning && impl_->dam_count_ > 0;
 }
-bool SimulationSession::IsReady() const { return impl_->snapshot_.has_value(); }
-std::optional<LatticeRenderSnapshot> SimulationSession::Update(
+bool FreeSurfaceLbm3DSession::IsReady() const { return impl_->snapshot_.has_value(); }
+std::optional<LatticeRenderSnapshot> FreeSurfaceLbm3DSession::Update(
     double delta_ms) {
   return impl_->Update(delta_ms);
 }

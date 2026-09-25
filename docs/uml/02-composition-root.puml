@@ -6,7 +6,20 @@ skinparam shadowing false
 skinparam classAttributeIconSize 0
 skinparam linetype ortho
 
-class "rheo::RheoLBMApp" as Root <<composition root>> {
+class "rheo::RheoLBMApp" as App {
+  + RheoLBMApp(SimulationModel)
+  + Run()
+}
+enum SimulationModel {
+  FreeSurface3D
+  ShallowWater2D
+}
+class "RunShallowWaterLbm2DApp()" as Run2D
+App --> SimulationModel : seleção na inicialização
+App ..> Root : FreeSurface3D
+App ..> Run2D : ShallowWater2D
+
+class FreeSurfaceLbm3DApp as Root <<composition root 3D>> {
   + Run()
   - Init()
   - MainLoop()
@@ -20,15 +33,15 @@ class "graphics::Device" as Device
 class "graphics::SwapChain" as SwapChain
 class "graphics::CommandPools" as CommandPools
 class "graphics::FrameSync" as FrameSync
-class "assets::TerrainLoader" as TerrainLoader
+class "assets::DemLoader" as DemLoader
 class "assets::ImageLoader" as ImageLoader
 class "assets::ProjectRepository" as ProjectRepository
-class "simulation::SimulationSession" as SimulationSession
+class "simulation::FreeSurfaceLbm3DSession" as FreeSurfaceLbm3DSession
 class "application::ApplicationController" as ApplicationController
 class "renderer::Renderer" as Renderer
 class "ui::UserInterface" as UserInterface
 
-interface "assets::ITerrainLoader" as ITerrainLoader
+interface "assets::IDemLoader" as IDemLoader
 interface "assets::IImageLoader" as IImageLoader
 interface "assets::IProjectRepository" as IProjectRepository
 interface "simulation::ISimulationSession" as ISimulationSession
@@ -42,27 +55,27 @@ Root *-- Device
 Root *-- SwapChain
 Root *-- CommandPools
 Root *-- FrameSync
-Root *-- TerrainLoader
+Root *-- DemLoader
 Root *-- ImageLoader
 Root *-- ProjectRepository
-Root *-- SimulationSession
+Root *-- FreeSurfaceLbm3DSession
 Root *-- ApplicationController
 Root *-- Renderer
 Root *-- UserInterface
 
 Window --> InputQueue : recebe referência
-SimulationSession --> Device
-SimulationSession --> CommandPools
-SimulationSession --> FrameSync
+FreeSurfaceLbm3DSession --> Device
+FreeSurfaceLbm3DSession --> CommandPools
+FreeSurfaceLbm3DSession --> FrameSync
 
-TerrainLoader ..|> ITerrainLoader
+DemLoader ..|> IDemLoader
 ImageLoader ..|> IImageLoader
 ProjectRepository ..|> IProjectRepository
-SimulationSession ..|> ISimulationSession
+FreeSurfaceLbm3DSession ..|> ISimulationSession
 ApplicationController ..|> ICommandSink
 UserInterface ..|> IOverlayPass
 
-ApplicationController --> ITerrainLoader
+ApplicationController --> IDemLoader
 ApplicationController --> IImageLoader
 ApplicationController --> IProjectRepository
 ApplicationController --> ISimulationSession

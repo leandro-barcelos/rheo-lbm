@@ -1,5 +1,5 @@
 @startuml
-title Ciclo de vida de SimulationSession
+title Ciclo de vida de FreeSurfaceLbm3DSession
 
 skinparam backgroundColor transparent
 skinparam shadowing false
@@ -12,7 +12,7 @@ state Running : simulador GPU executando
 state Paused : simulador preservado e parado
 
 Empty --> Editing : InitializeTerrain()
-Editing --> Running : Play(settings) / cria LbmSolver
+Editing --> Running : Play(settings) / cria FreeSurfaceLbm3DSolver
 Running --> Paused : Pause()
 Paused --> Running : Play(settings)
 Running --> Editing : ResetToTerrain()
@@ -35,7 +35,7 @@ Paused --> Empty : Clear()
 Empty --> [*]
 
 note right of Editing
-  LbmSolver é privado ao módulo.
+  FreeSurfaceLbm3DSolver é privado ao módulo.
   O renderer observa somente snapshots.
 end note
 

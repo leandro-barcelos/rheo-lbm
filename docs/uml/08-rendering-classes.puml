@@ -37,17 +37,17 @@ package graphics {
 }
 
 package simulation {
-  class SimulationSession
-  class "SimulationSession::Impl" as SimulationImpl <<private>>
-  class LbmSolver <<private>>
+  class FreeSurfaceLbm3DSession
+  class "FreeSurfaceLbm3DSession::Impl" as SimulationImpl <<private>>
+  class FreeSurfaceLbm3DSolver <<private>>
   class LatticeRenderSnapshot <<public contract>>
   class Cell <<shader ABI>>
 
-  SimulationSession *-- SimulationImpl
-  SimulationImpl *-- "0..1" LbmSolver
+  FreeSurfaceLbm3DSession *-- SimulationImpl
+  SimulationImpl *-- "0..1" FreeSurfaceLbm3DSolver
   SimulationImpl --> LatticeRenderSnapshot : produz
-  LbmSolver *-- "1..*" AllocatedBuffer
-  LbmSolver ..> Cell
+  FreeSurfaceLbm3DSolver *-- "1..*" AllocatedBuffer
+  FreeSurfaceLbm3DSolver ..> Cell
   LatticeRenderSnapshot o-- GraphicsBufferView
 }
 

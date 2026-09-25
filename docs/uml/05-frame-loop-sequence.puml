@@ -1,12 +1,12 @@
 @startuml
-title Sequência de um frame
+title Sequência de um frame 3D
 
 skinparam backgroundColor transparent
 skinparam shadowing false
 autonumber
 
 actor User
-participant "rheo-lbm\nRheoLBMApp" as Root
+participant "rheo-lbm\nFreeSurfaceLbm3DApp" as Root
 participant "platform::Window" as Window
 queue "events::InputQueue" as InputQueue
 participant "ui::UserInterface" as UI

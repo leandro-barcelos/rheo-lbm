@@ -1,11 +1,14 @@
-if(RHEO_MODEL STREQUAL "2D")
-    add_executable(shallow_water_test shallow_water_test.cpp)
-    target_link_libraries(shallow_water_test PRIVATE rheo::application)
-    add_test(NAME shallow_water_test COMMAND shallow_water_test)
-    add_test(NAME shallow_water_horizons COMMAND shallow_water_test --horizons)
-    set_tests_properties(shallow_water_horizons PROPERTIES LABELS slow TIMEOUT 7200 ENVIRONMENT "OMP_NUM_THREADS=4")
-    return()
-endif()
+add_executable(app_options_test app_options_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/app_options.cpp
+    ${PROJECT_SOURCE_DIR}/src/rheo_lbm_app.cpp)
+target_include_directories(app_options_test PRIVATE ${PROJECT_SOURCE_DIR}/src)
+add_test(NAME app_options_test COMMAND app_options_test)
+
+add_executable(shallow_water_test shallow_water_test.cpp)
+target_link_libraries(shallow_water_test PRIVATE rheo::application)
+add_test(NAME shallow_water_test COMMAND shallow_water_test)
+add_test(NAME shallow_water_horizons COMMAND shallow_water_test --horizons)
+set_tests_properties(shallow_water_horizons PROPERTIES LABELS slow TIMEOUT 7200 ENVIRONMENT "OMP_NUM_THREADS=4")
 
 add_executable(sha256_test sha256_test.cpp)
 target_include_directories(sha256_test PRIVATE ${PROJECT_SOURCE_DIR}/src/domain/src)
