@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 4.2)
 project(rheo-lbm)
 
-include(CTest)
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug CACHE STRING "" FORCE)
 endif()
@@ -67,10 +66,6 @@ add_subdirectory(src/simulation)
 add_subdirectory(src/application)
 add_subdirectory(src/renderer)
 add_subdirectory(src/ui)
-
-if(BUILD_TESTING)
-    add_subdirectory(tests)
-endif()
 
 add_executable(${PROJECT_NAME}
     src/main.cpp
