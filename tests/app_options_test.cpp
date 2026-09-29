@@ -21,8 +21,8 @@ auto Parse(std::initializer_list<std::string_view> arguments) {
 }  // namespace
 
 // Exercise the real dispatcher without opening a window or creating a device.
-void rheo::RunFreeSurfaceLbm3DApp() { ++runs_3d; }
-void rheo::RunShallowWaterLbm2DApp() { ++runs_2d; }
+void rheo::RunFreeSurfaceApp() { ++runs_3d; }
+void rheo::RunShallowWaterApp() { ++runs_2d; }
 
 int main() {
   try {

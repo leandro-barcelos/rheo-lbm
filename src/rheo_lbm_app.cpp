@@ -8,10 +8,10 @@ RheoLBMApp::RheoLBMApp(SimulationModel model) : model_(model) {}
 void RheoLBMApp::Run() {
   switch (model_) {
     case SimulationModel::kFreeSurface3D:
-      RunFreeSurfaceLbm3DApp();
+      RunFreeSurfaceApp();
       break;
     case SimulationModel::kShallowWater2D:
-      RunShallowWaterLbm2DApp();
+      RunShallowWaterApp();
       break;
   }
 }

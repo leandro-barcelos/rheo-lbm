@@ -9,7 +9,7 @@
 #ifdef _OPENMP
 #include <omp.h>
 #endif
-void rheo::RunShallowWaterLbm2DApp() {
+void rheo::RunShallowWaterApp() {
 #ifdef _OPENMP
   if (!std::getenv("OMP_NUM_THREADS"))
     omp_set_num_threads(std::min(4, omp_get_max_threads()));

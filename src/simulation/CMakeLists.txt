@@ -1,10 +1,10 @@
 add_library(
     rheo_simulation STATIC
-    src/shallow_water_lbm_2d_solver.cpp
+    src/shallow_water_solver.cpp
     src/shallow_water_session.cpp
     src/lattice_initializer.cpp
     src/lattice_editor.cpp
-    src/free_surface_lbm_3d_solver.cpp
+    src/free_surface_solver.cpp
     src/simulation_session.cpp
 )
 add_library(rheo::simulation ALIAS rheo_simulation)

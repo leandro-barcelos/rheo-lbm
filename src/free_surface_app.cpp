@@ -21,12 +21,12 @@ namespace {
 constexpr platform::WindowProperties kWindowProperties{
     .width = 1280, .height = 720, .title = "Rheo LBM"};
 
-class FreeSurfaceLbm3DApp {
+class FreeSurfaceApp {
  public:
-  FreeSurfaceLbm3DApp();
-  FreeSurfaceLbm3DApp(FreeSurfaceLbm3DApp const&) = delete;
-  FreeSurfaceLbm3DApp& operator=(FreeSurfaceLbm3DApp const&) = delete;
-  ~FreeSurfaceLbm3DApp() = default;
+  FreeSurfaceApp();
+  FreeSurfaceApp(FreeSurfaceApp const&) = delete;
+  FreeSurfaceApp& operator=(FreeSurfaceApp const&) = delete;
+  ~FreeSurfaceApp() = default;
 
   void Run();
 
@@ -46,7 +46,7 @@ class FreeSurfaceLbm3DApp {
   assets::DemLoader dem_loader_;
   assets::ImageLoader image_loader_;
   assets::ProjectRepository project_repository_;
-  simulation::FreeSurfaceLbm3DSession simulation_;
+  simulation::FreeSurfaceSession simulation_;
   application::ApplicationController application_;
   renderer::Renderer renderer_;
   ui::UserInterface ui_;
@@ -55,14 +55,14 @@ class FreeSurfaceLbm3DApp {
   application::EditorInputRouter editor_input_;
 };
 
-FreeSurfaceLbm3DApp::FreeSurfaceLbm3DApp()
+FreeSurfaceApp::FreeSurfaceApp()
     : window_(kWindowProperties, input_queue_),
       simulation_(device_, command_pools_, frame_sync_),
       application_(dem_loader_, image_loader_, project_repository_,
                    simulation_),
       renderer_(window_.Size()) {}
 
-void FreeSurfaceLbm3DApp::Run() {
+void FreeSurfaceApp::Run() {
   Init();
   MainLoop();
   device_.LogicalDevice().waitIdle();
@@ -70,7 +70,7 @@ void FreeSurfaceLbm3DApp::Run() {
   renderer_.Shutdown();
 }
 
-void FreeSurfaceLbm3DApp::Init() {
+void FreeSurfaceApp::Init() {
   auto const extensions = platform::Window::RequiredGraphicsExtensions();
   context_.Init(extensions);
   context_.CreateSurface(window_);
@@ -83,7 +83,7 @@ void FreeSurfaceLbm3DApp::Init() {
   last_time_ = platform::Window::TimeSeconds();
 }
 
-void FreeSurfaceLbm3DApp::MainLoop() {
+void FreeSurfaceApp::MainLoop() {
   const char* smoke_frames = std::getenv("RHEO_SMOKE_FRAMES");
   int frame_limit = smoke_frames ? std::atoi(smoke_frames) : 0;
   int frame = 0;
@@ -110,7 +110,7 @@ void FreeSurfaceLbm3DApp::MainLoop() {
   }
 }
 
-void FreeSurfaceLbm3DApp::RouteInput(ui::InputCaptureState capture) {
+void FreeSurfaceApp::RouteInput(ui::InputCaptureState capture) {
   auto logical = window_.LogicalSize(), pixels = window_.Size();
   auto events = input_queue_.Drain();
   editor_input_.Route(
@@ -124,7 +124,7 @@ void FreeSurfaceLbm3DApp::RouteInput(ui::InputCaptureState capture) {
        [this] { renderer_.RequestResize(); }});
 }
 
-void FreeSurfaceLbm3DApp::UpdateDeltaTime() {
+void FreeSurfaceApp::UpdateDeltaTime() {
   double const current_time = platform::Window::TimeSeconds();
   delta_time_ = (current_time - last_time_) * 1000.0;
   last_time_ = current_time;
@@ -132,7 +132,7 @@ void FreeSurfaceLbm3DApp::UpdateDeltaTime() {
 
 }  // namespace
 
-void rheo::RunFreeSurfaceLbm3DApp() {
-  FreeSurfaceLbm3DApp app;
+void rheo::RunFreeSurfaceApp() {
+  FreeSurfaceApp app;
   app.Run();
 }

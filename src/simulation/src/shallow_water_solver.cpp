@@ -1,4 +1,4 @@
-#include "rheo/simulation/shallow_water_lbm_2d_solver.h"
+#include "rheo/simulation/shallow_water_solver.h"
 
 #include <algorithm>
 #include <cmath>
@@ -11,7 +11,7 @@ namespace simulation {
 namespace {
 constexpr int opposite[9] = {0, 5, 6, 7, 8, 1, 2, 3, 4};
 }
-ShallowWaterLbm2DSolver::ShallowWaterLbm2DSolver(ShallowWaterSettings s) : settings_(s) {
+ShallowWaterSolver::ShallowWaterSolver(ShallowWaterSettings s) : settings_(s) {
   if (s.nx < 3 || s.ny < 3 || !std::isfinite(s.dx) || s.dx <= 0 ||
       !std::isfinite(s.dt) || s.dt <= 0 || !std::isfinite(s.tau) ||
       s.tau <= .5 || !std::isfinite(s.gravity) || s.gravity <= 0 ||
@@ -31,7 +31,7 @@ ShallowWaterLbm2DSolver::ShallowWaterLbm2DSolver(ShallowWaterSettings s) : setti
   a.obstacles.assign(n, 0);
   Initialize(std::move(a));
 }
-std::array<double, 9> ShallowWaterLbm2DSolver::Equilibrium(double h, double u,
+std::array<double, 9> ShallowWaterSolver::Equilibrium(double h, double u,
                                                 double v) const {
   // Zhou (2002), Eq. 15, expressed using dimensionless u/e and v/e.
   const double e = settings_.dx / settings_.dt;
@@ -46,7 +46,7 @@ std::array<double, 9> ShallowWaterLbm2DSolver::Equilibrium(double h, double u,
   }
   return f;
 }
-void ShallowWaterLbm2DSolver::Initialize(ShallowWaterSnapshot a) {
+void ShallowWaterSolver::Initialize(ShallowWaterSnapshot a) {
   const auto n = std::size_t(settings_.nx) * settings_.ny;
   if (a.nx != settings_.nx || a.ny != settings_.ny || a.depth.size() != n ||
       a.bed.size() != n || a.velocity_x.size() != n ||
@@ -83,7 +83,7 @@ void ShallowWaterLbm2DSolver::Initialize(ShallowWaterSnapshot a) {
           ((t - b) * settings_.dx);
     }
 }
-void ShallowWaterLbm2DSolver::OpenBoundary(int x, Boundary bc) {
+void ShallowWaterSolver::OpenBoundary(int x, Boundary bc) {
   if (bc == Boundary::Periodic || bc == Boundary::NoSlip ||
       bc == Boundary::Slip)
     return;
@@ -150,7 +150,7 @@ void ShallowWaterLbm2DSolver::OpenBoundary(int x, Boundary bc) {
     }
   }
 }
-void ShallowWaterLbm2DSolver::Macroscopic() {
+void ShallowWaterSolver::Macroscopic() {
   int bad = 0;
   const int n = state_.nx * state_.ny;
   const double e = settings_.dx / settings_.dt;
@@ -181,7 +181,7 @@ void ShallowWaterLbm2DSolver::Macroscopic() {
                              std::to_string(state_.steps) +
                              "; reset the scenario.");
 }
-void ShallowWaterLbm2DSolver::Step() {
+void ShallowWaterSolver::Step() {
   const int nx = state_.nx, ny = state_.ny, n = nx * ny;
   const double e = settings_.dx / settings_.dt;
 #pragma omp parallel for schedule(static) if (n > 20000)
@@ -252,7 +252,7 @@ void ShallowWaterLbm2DSolver::Step() {
   state_.time = state_.steps * settings_.dt;
   Macroscopic();
 }
-void ShallowWaterLbm2DSolver::Run(int steps) {
+void ShallowWaterSolver::Run(int steps) {
   for (int i = 0; i < steps; ++i) Step();
 }
 }  // namespace simulation

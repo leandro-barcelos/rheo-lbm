@@ -1,5 +1,5 @@
-#ifndef RHEO_SIMULATION_FREE_SURFACE_LBM_3D_SOLVER_H
-#define RHEO_SIMULATION_FREE_SURFACE_LBM_3D_SOLVER_H
+#ifndef RHEO_SIMULATION_FREE_SURFACE_SOLVER_H
+#define RHEO_SIMULATION_FREE_SURFACE_SOLVER_H
 
 #include <array>
 #include <cstdint>
@@ -13,14 +13,14 @@
 
 namespace simulation {
 
-class FreeSurfaceLbm3DSolver {
+class FreeSurfaceSolver {
  public:
   struct DebugBuffers {
     std::array<graphics::AllocatedBuffer const*, 2> momentum;
     std::uint32_t read_index;
   };
 
-  FreeSurfaceLbm3DSolver() = default;
+  FreeSurfaceSolver() = default;
   void Initialize(graphics::Device const& device,
                   graphics::CommandPools const& pools,
                   graphics::FrameSync& sync,

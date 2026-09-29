@@ -117,7 +117,7 @@ int main() {
   pools.Init(device);
   graphics::FrameSync sync;
   sync.Init(device);
-  simulation::FreeSurfaceLbm3DSession session(device, pools, sync);
+  simulation::FreeSurfaceSession session(device, pools, sync);
   auto dem = std::make_shared<domain::DemData>(
       domain::DemData{.samples = {{.elevation = -2},
                                   {.elevation = -1.1F},

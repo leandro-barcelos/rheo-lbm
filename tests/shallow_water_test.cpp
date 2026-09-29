@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
       return 0;
     }
     ShallowWaterSettings p;
-    ShallowWaterLbm2DSolver a(p), b(p);
+    ShallowWaterSolver a(p), b(p);
     auto initial = a.Snapshot();
     for (std::size_t i = 0; i < initial.depth.size(); ++i) {
       initial.velocity_x[i] = .1;
@@ -102,7 +102,7 @@ int main(int argc, char** argv) {
       p.right = Boundary::Depth;
       p.sides = side;
       p.discharge = .02;
-      ShallowWaterLbm2DSolver flow(p);
+      ShallowWaterSolver flow(p);
       flow.Run(100);
       for (int y = 1; y < p.ny - 1; ++y) {
         int i = y * p.nx;
@@ -113,19 +113,19 @@ int main(int argc, char** argv) {
     }
     p.left = p.right = Boundary::ZeroGradient;
     p.sides = Boundary::Slip;
-    ShallowWaterLbm2DSolver zero(p);
+    ShallowWaterSolver zero(p);
     zero.Run(50);
     for (auto h : zero.Snapshot().depth) Near(h, 1, 1e-12, "zero gradient");
     p.left = Boundary::Velocity;
     p.right = Boundary::Depth;
     p.velocity = .03;
-    ShallowWaterLbm2DSolver velocity(p);
+    ShallowWaterSolver velocity(p);
     velocity.Run(50);
     Near(velocity.Snapshot().velocity_x[p.nx], .03, 1e-12, "velocity inlet");
     // Eq. 16: a linear bed generates the prescribed acceleration, including
     // the one-sided gradients at both edges. Manning damps uniform motion.
     ShallowWaterSettings force_parameters;
-    ShallowWaterLbm2DSolver slope(force_parameters);
+    ShallowWaterSolver slope(force_parameters);
     auto sloped = slope.Snapshot();
     for (int y = 0; y < sloped.ny; ++y)
       for (int x = 0; x < sloped.nx; ++x)
@@ -136,7 +136,7 @@ int main(int argc, char** argv) {
       Near(u, .001 * force_parameters.gravity * force_parameters.dt, 1e-13,
            "bed slope acceleration");
     force_parameters.manning = .03;
-    ShallowWaterLbm2DSolver friction(force_parameters);
+    ShallowWaterSolver friction(force_parameters);
     auto moving = friction.Snapshot();
     moving.velocity_x.assign(moving.depth.size(), .2);
     friction.Initialize(moving);
@@ -160,7 +160,7 @@ int main(int argc, char** argv) {
     try {
       auto invalid = p;
       invalid.dt = 0;
-      ShallowWaterLbm2DSolver bad(invalid);
+      ShallowWaterSolver bad(invalid);
     } catch (const std::invalid_argument&) {
       rejected = true;
     }

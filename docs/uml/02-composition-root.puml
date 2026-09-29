@@ -14,12 +14,12 @@ enum SimulationModel {
   FreeSurface3D
   ShallowWater2D
 }
-class "RunShallowWaterLbm2DApp()" as Run2D
+class "RunShallowWaterApp()" as Run2D
 App --> SimulationModel : seleção na inicialização
 App ..> Root : FreeSurface3D
 App ..> Run2D : ShallowWater2D
 
-class FreeSurfaceLbm3DApp as Root <<composition root 3D>> {
+class FreeSurfaceApp as Root <<composition root 3D>> {
   + Run()
   - Init()
   - MainLoop()
@@ -36,7 +36,7 @@ class "graphics::FrameSync" as FrameSync
 class "assets::DemLoader" as DemLoader
 class "assets::ImageLoader" as ImageLoader
 class "assets::ProjectRepository" as ProjectRepository
-class "simulation::FreeSurfaceLbm3DSession" as FreeSurfaceLbm3DSession
+class "simulation::FreeSurfaceSession" as FreeSurfaceSession
 class "application::ApplicationController" as ApplicationController
 class "renderer::Renderer" as Renderer
 class "ui::UserInterface" as UserInterface
@@ -58,20 +58,20 @@ Root *-- FrameSync
 Root *-- DemLoader
 Root *-- ImageLoader
 Root *-- ProjectRepository
-Root *-- FreeSurfaceLbm3DSession
+Root *-- FreeSurfaceSession
 Root *-- ApplicationController
 Root *-- Renderer
 Root *-- UserInterface
 
 Window --> InputQueue : recebe referência
-FreeSurfaceLbm3DSession --> Device
-FreeSurfaceLbm3DSession --> CommandPools
-FreeSurfaceLbm3DSession --> FrameSync
+FreeSurfaceSession --> Device
+FreeSurfaceSession --> CommandPools
+FreeSurfaceSession --> FrameSync
 
 DemLoader ..|> IDemLoader
 ImageLoader ..|> IImageLoader
 ProjectRepository ..|> IProjectRepository
-FreeSurfaceLbm3DSession ..|> ISimulationSession
+FreeSurfaceSession ..|> ISimulationSession
 ApplicationController ..|> ICommandSink
 UserInterface ..|> IOverlayPass
 

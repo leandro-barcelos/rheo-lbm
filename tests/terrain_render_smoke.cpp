@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
     pools.Init(device);
     graphics::FrameSync sync;
     sync.Init(device);
-    simulation::FreeSurfaceLbm3DSession session(device, pools, sync);
+    simulation::FreeSurfaceSession session(device, pools, sync);
     SmokeDemLoader dem;
     if (argc > 1) dem.path = argv[1];
     assets::ImageLoader images;

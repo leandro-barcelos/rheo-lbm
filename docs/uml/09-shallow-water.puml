@@ -8,7 +8,7 @@ skinparam packageStyle rectangle
 package "executável" {
   class "main.cpp" as Main
   class "rheo::RheoLBMApp" as App
-  class "RunShallowWaterLbm2DApp()" as Run2D
+  class "RunShallowWaterApp()" as Run2D
 }
 package domain {
   class ShallowWaterSettings
@@ -16,7 +16,7 @@ package domain {
   class ShallowWaterSnapshot
 }
 package simulation {
-  class ShallowWaterLbm2DSolver
+  class ShallowWaterSolver
   class ShallowWaterSession
 }
 package application {
@@ -39,9 +39,9 @@ Run2D ..> ShallowWaterRenderer
 Run2D ..> ShallowWaterInterface
 Run2D --> Infrastructure
 ShallowWaterController *-- ShallowWaterSession
-ShallowWaterSession *-- ShallowWaterLbm2DSolver
-ShallowWaterLbm2DSolver --> ShallowWaterSettings
-ShallowWaterLbm2DSolver --> ShallowWaterSnapshot
+ShallowWaterSession *-- ShallowWaterSolver
+ShallowWaterSolver --> ShallowWaterSettings
+ShallowWaterSolver --> ShallowWaterSnapshot
 ShallowWaterController --> ShallowWaterScenario
 ShallowWaterInterface --> ShallowWaterController : seleção e execução
 ShallowWaterInterface *-- ImGuiLayer

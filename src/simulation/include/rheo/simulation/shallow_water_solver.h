@@ -1,5 +1,5 @@
-#ifndef RHEO_SIMULATION_SHALLOW_WATER_LBM_2D_SOLVER_H
-#define RHEO_SIMULATION_SHALLOW_WATER_LBM_2D_SOLVER_H
+#ifndef RHEO_SIMULATION_SHALLOW_WATER_SOLVER_H
+#define RHEO_SIMULATION_SHALLOW_WATER_SOLVER_H
 
 #include <array>
 #include <cstdint>
@@ -14,9 +14,9 @@ inline constexpr int kVelocityVectorY[9] = {0, 0, 1, 1, 1, 0, -1, -1, -1};
 using domain::Boundary;
 using domain::ShallowWaterSettings;
 using domain::ShallowWaterSnapshot;
-class ShallowWaterLbm2DSolver {
+class ShallowWaterSolver {
  public:
-  explicit ShallowWaterLbm2DSolver(ShallowWaterSettings settings);
+  explicit ShallowWaterSolver(ShallowWaterSettings settings);
   void Initialize(ShallowWaterSnapshot state);
   void Step();
   void Run(int steps);
@@ -34,4 +34,4 @@ class ShallowWaterLbm2DSolver {
 };
 }  // namespace simulation
 
-#endif  //  RHEO_SIMULATION_SHALLOW_WATER_LBM_2D_SOLVER_H
+#endif  //  RHEO_SIMULATION_SHALLOW_WATER_SOLVER_H

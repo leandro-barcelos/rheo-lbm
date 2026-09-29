@@ -6,7 +6,7 @@ skinparam shadowing false
 autonumber
 
 actor User
-participant "rheo-lbm\nFreeSurfaceLbm3DApp" as Root
+participant "rheo-lbm\nFreeSurfaceApp" as Root
 participant "platform::Window" as Window
 queue "events::InputQueue" as InputQueue
 participant "ui::UserInterface" as UI
