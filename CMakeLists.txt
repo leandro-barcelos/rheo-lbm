@@ -66,6 +66,7 @@ add_subdirectory(src/simulation)
 add_subdirectory(src/application)
 add_subdirectory(src/renderer)
 add_subdirectory(src/ui)
+add_subdirectory(src/runtime)
 
 add_executable(${PROJECT_NAME}
     src/main.cpp
@@ -85,6 +86,7 @@ target_link_libraries(
     rheo::renderer
     rheo::simulation
     rheo::ui
+    rheo::runtime
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE rheo::assets)
