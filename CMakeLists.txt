@@ -155,9 +155,3 @@ compile_slang_shaders(
     -entry reclassify_after_dam_removal)
 add_dependencies(rheo-lbm collision_shader streaming_shader
     transitions_shader)
-if(TARGET lattice_gpu_test)
-    add_dependencies(lattice_gpu_test lattice_edit_shader)
-    add_dependencies(lattice_gpu_test collision_shader streaming_shader
-        transitions_shader)
-    add_dependencies(terrain_render_smoke lattice_edit_shader)
-endif()
