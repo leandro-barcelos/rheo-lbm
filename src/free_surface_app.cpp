@@ -55,13 +55,12 @@ FreeSurfaceApp::FreeSurfaceApp()
 void FreeSurfaceApp::Run() {
   Init();
   MainLoop();
-  backend_.Device().LogicalDevice().waitIdle();
+  backend_.WaitIdle();
   ui_.Shutdown();
   renderer_.Shutdown();
 }
 
 void FreeSurfaceApp::Init() {
-  backend_.Init();
   renderer_.Init(backend_.Device(), backend_.SwapChain(),
                  backend_.CommandPools());
   ui_.Init(backend_.Window(), backend_.GraphicsContext(), backend_.Device(),
@@ -73,10 +72,15 @@ void FreeSurfaceApp::MainLoop() {
   const char* smoke_frames = std::getenv("RHEO_SMOKE_FRAMES");
   int frame_limit = smoke_frames ? std::atoi(smoke_frames) : 0;
   int frame = 0;
-  while (!application_.ShouldQuit() && !backend_.Window().ShouldClose() &&
+  while (!application_.ShouldQuit() && !backend_.ShouldClose() &&
          (!frame_limit || frame < frame_limit)) {
+    runtime::ApplicationBackend::PollEvents();
+    if (backend_.IsMinimized()) {
+      runtime::ApplicationBackend::WaitEvents();
+      continue;
+    }
+
     UpdateDeltaTime();
-    platform::Window::PollEvents();
 
     ui_.BeginFrame();
     ui_.Draw(application_.ViewState(), application_);

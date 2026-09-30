@@ -17,7 +17,6 @@ void rheo::RunShallowWaterApp() {
       .width = 1280, .height = 720, .title = "Rheo LBM"};
   runtime::ApplicationBackend backend{runtime::ApplicationBackend::Config{
       .window_properties = kWindowProperties}};
-  backend.Init();
   renderer::ShallowWaterRenderer renderer;
   renderer.Init(backend.Device(), backend.CommandPools());
   ui::ShallowWaterInterface ui;
@@ -27,23 +26,21 @@ void rheo::RunShallowWaterApp() {
   const char* smoke_frames = std::getenv("RHEO_SMOKE_FRAMES");
   int frame_limit = smoke_frames ? std::atoi(smoke_frames) : 0;
   int frame = 0;
-  while (!backend.Window().ShouldClose() &&
-         (!frame_limit || frame < frame_limit)) {
-    platform::Window::PollEvents();
-    (void)backend.InputQueue().Drain();
-    auto size = backend.Window().Size();
-    if (size.width == 0 || size.height == 0) {
-      platform::Window::WaitEvents();
+  while (!backend.ShouldClose() && (!frame_limit || frame < frame_limit)) {
+    runtime::ApplicationBackend::PollEvents();
+    if (backend.IsMinimized()) {
+      runtime::ApplicationBackend::WaitEvents();
       continue;
     }
-    if (size.width != int(backend.SwapChain().Extent().width) ||
-        size.height != int(backend.SwapChain().Extent().height)) {
-      backend.SwapChain().RecreateSwapChain(backend.Device(), backend.Window());
+
+    (void)backend.InputQueue().Drain();
+
+    if (backend.RecreteSwapChain()) {
       ui.OnFrameResourcesChanged(backend.SwapChain().ImageCount());
     }
+
     controller.Update();
-    // Finish prior GPU use before the UI backend updates its buffers.
-    backend.Device().LogicalDevice().waitIdle();
+    backend.WaitIdle();
     ui.BeginFrame();
     ui.Draw(controller, renderer);
     ui.EndFrame();
@@ -51,6 +48,5 @@ void rheo::RunShallowWaterApp() {
                          backend.FrameSync(), backend.Window(), ui);
     ++frame;
   }
-  backend.Device().LogicalDevice().waitIdle();
   ui.Shutdown();
 }

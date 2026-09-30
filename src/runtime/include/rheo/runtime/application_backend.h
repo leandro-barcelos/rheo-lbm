@@ -18,7 +18,13 @@ class ApplicationBackend {
   } __attribute__((aligned(16)));
 
   explicit ApplicationBackend(Config const& config);
-  void Init();
+
+  static void PollEvents();
+  [[nodiscard]] bool IsMinimized() const;
+  static void WaitEvents();
+  void WaitIdle();
+  [[nodiscard]] bool ShouldClose() const;
+  bool RecreteSwapChain();
 
   [[nodiscard]] events::InputQueue& InputQueue() { return input_queue_; }
   [[nodiscard]] platform::Window& Window() { return window_; }
