@@ -23,10 +23,7 @@ void rheo::RunShallowWaterApp() {
   ui.Init(backend.Window(), backend.GraphicsContext(), backend.Device(),
           backend.SwapChain());
   application::ShallowWaterController controller;
-  const char* smoke_frames = std::getenv("RHEO_SMOKE_FRAMES");
-  int frame_limit = smoke_frames ? std::atoi(smoke_frames) : 0;
-  int frame = 0;
-  while (!backend.ShouldClose() && (!frame_limit || frame < frame_limit)) {
+  while (!backend.ShouldClose()) {
     runtime::ApplicationBackend::PollEvents();
     if (backend.IsMinimized()) {
       runtime::ApplicationBackend::WaitEvents();
@@ -46,7 +43,6 @@ void rheo::RunShallowWaterApp() {
     ui.EndFrame();
     renderer.RenderFrame(backend.Device(), backend.SwapChain(),
                          backend.FrameSync(), backend.Window(), ui);
-    ++frame;
   }
   ui.Shutdown();
 }
