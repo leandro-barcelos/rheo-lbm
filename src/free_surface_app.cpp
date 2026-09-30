@@ -1,126 +1,63 @@
-#include <cstdlib>
+#include "free_surface_app.h"
 
-#include "model_runners.h"
-#include "rheo/application/application_controller.h"
-#include "rheo/application/editor_input_router.h"
-#include "rheo/assets/asset_services.h"
-#include "rheo/events/input_event.h"
-#include "rheo/platform/window.h"
-#include "rheo/renderer/renderer.h"
 #include "rheo/runtime/application_backend.h"
-#include "rheo/simulation/simulation_session.h"
-#include "rheo/ui/user_interface.h"
 
-namespace {
-constexpr platform::WindowProperties kWindowProperties{
-    .width = 1280, .height = 720, .title = "Rheo LBM"};
-
-class FreeSurfaceApp {
- public:
-  FreeSurfaceApp();
-  FreeSurfaceApp(FreeSurfaceApp const&) = delete;
-  FreeSurfaceApp& operator=(FreeSurfaceApp const&) = delete;
-  ~FreeSurfaceApp() = default;
-
-  void Run();
-
- private:
-  void Init();
-  void MainLoop();
-  void RouteInput(ui::InputCaptureState capture);
-  void UpdateDeltaTime();
-
-  runtime::ApplicationBackend backend_;
-  assets::DemLoader dem_loader_;
-  assets::ImageLoader image_loader_;
-  assets::ProjectRepository project_repository_;
-  simulation::FreeSurfaceSession simulation_;
-  application::ApplicationController application_;
-  renderer::Renderer renderer_;
-  ui::UserInterface ui_;
-  double last_time_ = 0.0;
-  double delta_time_ = 0.0;
-  application::EditorInputRouter editor_input_;
-};
-
-FreeSurfaceApp::FreeSurfaceApp()
-    : backend_(runtime::ApplicationBackend::Config{.window_properties =
-                                                       kWindowProperties}),
-      simulation_(backend_.Device(), backend_.CommandPools(),
-                  backend_.FrameSync()),
+namespace rheo {
+FreeSurfaceApp::FreeSurfaceApp(runtime::ApplicationBackend& backend)
+    : simulation_(backend.Device(), backend.CommandPools(),
+                  backend.FrameSync()),
       application_(dem_loader_, image_loader_, project_repository_,
                    simulation_),
-      renderer_(backend_.Window().Size()) {}
+      renderer_(backend.Window().Size()) {
+  renderer_.Init(backend.Device(), backend.SwapChain(), backend.CommandPools());
+  ui_.Init(backend.Window(), backend.GraphicsContext(), backend.Device(),
+           backend.SwapChain());
+}
 
-void FreeSurfaceApp::Run() {
-  Init();
-  MainLoop();
-  backend_.WaitIdle();
+FreeSurfaceApp::~FreeSurfaceApp() {
   ui_.Shutdown();
   renderer_.Shutdown();
 }
 
-void FreeSurfaceApp::Init() {
-  renderer_.Init(backend_.Device(), backend_.SwapChain(),
-                 backend_.CommandPools());
-  ui_.Init(backend_.Window(), backend_.GraphicsContext(), backend_.Device(),
-           backend_.SwapChain());
-  last_time_ = platform::Window::TimeSeconds();
-}
+bool FreeSurfaceApp::Update(runtime::ApplicationBackend& backend,
+                            double delta_time) {
+  ui_.BeginFrame();
+  ui_.Draw(application_.ViewState(), application_);
+  ui_.EndFrame();
+  application_.ProcessPendingCommands();
+  renderer_.PrepareCamera(application_.SceneState(), backend.Window().Size());
+  RouteInput(backend, ui_.InputCapture());
 
-void FreeSurfaceApp::MainLoop() {
-  while (!application_.ShouldQuit() && !backend_.ShouldClose()) {
-    runtime::ApplicationBackend::PollEvents();
-    if (backend_.IsMinimized()) {
-      runtime::ApplicationBackend::WaitEvents();
-      continue;
-    }
-
-    UpdateDeltaTime();
-
-    ui_.BeginFrame();
-    ui_.Draw(application_.ViewState(), application_);
-    ui_.EndFrame();
-    application_.ProcessPendingCommands();
-    renderer_.PrepareCamera(application_.SceneState(),
-                            backend_.Window().Size());
-    RouteInput(ui_.InputCapture());
-
-    application_.ProcessPendingCommands();
-    if (application_.ShouldQuit()) {
-      break;
-    }
-    application_.Update(delta_time_);
-    renderer_.RenderFrame(backend_.Device(), backend_.SwapChain(),
-                          backend_.FrameSync(), application_.SceneState(),
-                          backend_.Window(), ui_);
+  application_.ProcessPendingCommands();
+  if (application_.ShouldQuit()) {
+    return true;
   }
+  application_.Update(delta_time);
+  renderer_.RenderFrame(backend.Device(), backend.SwapChain(),
+                        backend.FrameSync(), application_.SceneState(),
+                        backend.Window(), ui_);
+
+  return application_.ShouldQuit() || backend.ShouldClose();
 }
 
-void FreeSurfaceApp::RouteInput(ui::InputCaptureState capture) {
-  auto logical = backend_.Window().LogicalSize(),
-       pixels = backend_.Window().Size();
-  auto events = backend_.InputQueue().Drain();
+void FreeSurfaceApp::RouteInput(runtime::ApplicationBackend& backend,
+                                ui::InputCaptureState capture) {
+  auto logical = backend.Window().LogicalSize();
+  auto pixels = backend.Window().Size();
+  auto events = backend.InputQueue().Drain();
   editor_input_.Route(
-      events, {capture.mouse, capture.keyboard},
-      {logical.width, logical.height}, {pixels.width, pixels.height},
-      application_,
-      {[this](double x, double y) { return renderer_.ScreenPointToRay(x, y); },
-       [this](events::InputEvent const& event) {
-         renderer_.HandleInput(event);
-       },
-       [this] { renderer_.RequestResize(); }});
+      events, {.mouse = capture.mouse, .keyboard = capture.keyboard},
+      {.width = logical.width, .height = logical.height},
+      {.width = pixels.width, .height = pixels.height}, application_,
+      {.ray =
+           [this](double xpos, double ypos) {
+             return renderer_.ScreenPointToRay(xpos, ypos);
+           },
+       .camera =
+           [this](events::InputEvent const& event) {
+             renderer_.HandleInput(event);
+           },
+       .resize = [this] { renderer_.RequestResize(); }});
 }
 
-void FreeSurfaceApp::UpdateDeltaTime() {
-  double const current_time = platform::Window::TimeSeconds();
-  delta_time_ = (current_time - last_time_) * 1000.0;
-  last_time_ = current_time;
-}
-
-}  // namespace
-
-void rheo::RunFreeSurfaceApp() {
-  FreeSurfaceApp app;
-  app.Run();
-}
+}  // namespace rheo
