@@ -72,8 +72,6 @@ add_executable(${PROJECT_NAME}
     src/main.cpp
     src/app_options.cpp
     src/rheo_lbm_app.cpp
-    src/free_surface_app.cpp
-    src/shallow_water_app.cpp
 )
 target_include_directories(${PROJECT_NAME} PRIVATE src)
 target_link_libraries(
