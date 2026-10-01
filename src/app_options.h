@@ -6,7 +6,7 @@
 #include <string>
 #include <string_view>
 
-#include "rheo_lbm_app.h"
+#include "simulation_model.h"
 
 namespace rheo {
 struct AppOptions {

@@ -1,13 +1,15 @@
 add_library(
     rheo_ui STATIC
-    src/shallow_water_interface.cpp
     src/imgui_layer.cpp
     src/user_interface.cpp
     src/panels/control_panel.cpp
+    src/panels/free_surface_panels.cpp
+    src/panels/lattice_editor_panel.cpp
     src/panels/parameters_panel.cpp
+    src/panels/shallow_water_panels.cpp
 )
 add_library(rheo::ui ALIAS rheo_ui)
-target_include_directories(rheo_ui PUBLIC include PRIVATE src)
+target_include_directories(rheo_ui PUBLIC include src)
 target_include_directories(rheo_ui PRIVATE ${PROJECT_SOURCE_DIR}/external)
 target_link_libraries(
     rheo_ui

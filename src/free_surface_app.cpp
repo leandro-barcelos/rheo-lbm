@@ -10,23 +10,19 @@ FreeSurfaceApp::FreeSurfaceApp(runtime::ApplicationBackend& backend)
                    simulation_),
       renderer_(backend.Window().Size()) {
   renderer_.Init(backend.Device(), backend.SwapChain(), backend.CommandPools());
-  ui_.Init(backend.Window(), backend.GraphicsContext(), backend.Device(),
-           backend.SwapChain());
 }
 
-FreeSurfaceApp::~FreeSurfaceApp() {
-  ui_.Shutdown();
-  renderer_.Shutdown();
-}
+FreeSurfaceApp::~FreeSurfaceApp() { renderer_.Shutdown(); }
 
 bool FreeSurfaceApp::Update(runtime::ApplicationBackend& backend,
-                            double delta_time) {
-  ui_.BeginFrame();
-  ui_.Draw(application_.ViewState(), application_);
-  ui_.EndFrame();
+                            double delta_time,
+                            ui::UserInterface& user_interface) {
+  user_interface.BeginFrame();
+  user_interface.Draw(application_.ViewState(), application_);
+  user_interface.EndFrame();
   application_.ProcessPendingCommands();
   renderer_.PrepareCamera(application_.SceneState(), backend.Window().Size());
-  RouteInput(backend, ui_.InputCapture());
+  RouteInput(backend, ui::UserInterface::InputCapture());
 
   application_.ProcessPendingCommands();
   if (application_.ShouldQuit()) {
@@ -35,7 +31,7 @@ bool FreeSurfaceApp::Update(runtime::ApplicationBackend& backend,
   application_.Update(delta_time);
   renderer_.RenderFrame(backend.Device(), backend.SwapChain(),
                         backend.FrameSync(), application_.SceneState(),
-                        backend.Window(), ui_);
+                        backend.Window(), user_interface);
 
   return application_.ShouldQuit() || backend.ShouldClose();
 }

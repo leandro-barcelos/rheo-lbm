@@ -1,14 +1,14 @@
 #ifndef RHEO_LBM_APP_H
 #define RHEO_LBM_APP_H
 
-#include <cstdint>
 #include <variant>
 
 #include "free_surface_app.h"
+#include "rheo/ui/user_interface.h"
 #include "shallow_water_app.h"
+#include "simulation_model.h"
 
 namespace rheo {
-enum class SimulationModel : uint8_t { kFreeSurface3D, kShallowWater2D };
 
 class RheoLBMApp {
  public:
@@ -25,6 +25,7 @@ class RheoLBMApp {
 
   runtime::ApplicationBackend backend_;
   SimulationModel model_;
+  ui::UserInterface ui_;
   std::variant<FreeSurfaceApp, ShallowWaterApp> application_;
   double last_time_ = 0.0;
   double delta_time_ = 0.0;

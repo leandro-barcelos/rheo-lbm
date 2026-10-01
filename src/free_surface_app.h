@@ -20,7 +20,8 @@ class FreeSurfaceApp {
   explicit FreeSurfaceApp(runtime::ApplicationBackend& backend);
   ~FreeSurfaceApp();
 
-  bool Update(runtime::ApplicationBackend& backend, double delta_time);
+  bool Update(runtime::ApplicationBackend& backend, double delta_time,
+              ui::UserInterface& user_interface);
 
  private:
   void RouteInput(runtime::ApplicationBackend& backend,
@@ -32,7 +33,6 @@ class FreeSurfaceApp {
   simulation::FreeSurfaceSession simulation_;
   application::ApplicationController application_;
   renderer::Renderer renderer_;
-  ui::UserInterface ui_;
   application::EditorInputRouter editor_input_;
 };
 

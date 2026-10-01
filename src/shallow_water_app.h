@@ -4,7 +4,7 @@
 #include "rheo/application/shallow_water_controller.h"
 #include "rheo/renderer/shallow_water_renderer.h"
 #include "rheo/runtime/application_backend.h"
-#include "rheo/ui/shallow_water_interface.h"
+#include "rheo/ui/user_interface.h"
 
 namespace rheo {
 
@@ -15,15 +15,12 @@ class ShallowWaterApp {
   ShallowWaterApp& operator=(const ShallowWaterApp&) = delete;
   ShallowWaterApp& operator=(ShallowWaterApp&&) = delete;
   explicit ShallowWaterApp(runtime::ApplicationBackend& backend);
-  ~ShallowWaterApp();
-
-  void Init(runtime::ApplicationBackend& backend);
-  bool Update(runtime::ApplicationBackend& backend, double delta_time);
+  bool Update(runtime::ApplicationBackend& backend, double delta_time,
+              ui::UserInterface& user_interface);
 
  private:
   application::ShallowWaterController application_;
   renderer::ShallowWaterRenderer renderer_;
-  ui::ShallowWaterInterface ui_;
 };
 
 }  // namespace rheo

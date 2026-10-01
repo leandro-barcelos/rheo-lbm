@@ -22,9 +22,15 @@ RheoLBMApp::RheoLBMApp(SimulationModel model)
         }
         throw std::invalid_argument("Invalid simulation model");
       }()),
-      last_time_(platform::Window::TimeSeconds()) {}
+      last_time_(platform::Window::TimeSeconds()) {
+  ui_.Init(backend_.Window(), backend_.GraphicsContext(), backend_.Device(),
+           backend_.SwapChain(), model_ == SimulationModel::kFreeSurface3D);
+}
 
-RheoLBMApp::~RheoLBMApp() { backend_.WaitIdle(); }
+RheoLBMApp::~RheoLBMApp() {
+  backend_.WaitIdle();
+  ui_.Shutdown();
+}
 
 void RheoLBMApp::Run() {
   auto should_quit = false;
@@ -39,7 +45,7 @@ void RheoLBMApp::Run() {
 
     std::visit(
         [&should_quit, this](auto& app) {
-          should_quit = app.Update(backend_, delta_time_);
+          should_quit = app.Update(backend_, delta_time_, ui_);
         },
         application_);
   }
