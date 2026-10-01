@@ -24,7 +24,8 @@ class ApplicationBackend {
   static void WaitEvents();
   void WaitIdle();
   [[nodiscard]] bool ShouldClose() const;
-  bool RecreteSwapChain();
+  [[nodiscard]] bool NeedsSwapChainRecreation() const;
+  [[nodiscard]] bool RecreateSwapChain();
 
   [[nodiscard]] events::InputQueue& InputQueue() { return input_queue_; }
   [[nodiscard]] platform::Window& Window() { return window_; }

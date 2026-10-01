@@ -50,25 +50,19 @@ class Renderer::Impl {
   void HandleInput(events::InputEvent const& event) {
     camera_.HandleInput(event);
   }
-  void RequestResize() { resize_pending_ = true; }
-
-  void RenderFrame(graphics::Device const& device,
-                   graphics::SwapChain& swap_chain,
-                   graphics::FrameSync& frame_sync,
-                   application::SceneState const& scene,
-                   platform::Window const& window, IOverlayPass& overlay) {
-    if (resize_pending_) {
-      RecreateSwapChain(device, swap_chain, window, overlay);
-    }
-
+  RenderResult RenderFrame(graphics::Device const& device,
+                           graphics::SwapChain& swap_chain,
+                           graphics::FrameSync& frame_sync,
+                           application::SceneState const& scene,
+                           IOverlayPass const& overlay) {
     std::uint32_t const image_index =
         swap_chain.AcquireNextImage(device, frame_sync);
     if (image_index == graphics::SwapChain::kInvalidImageIndex) {
-      RecreateSwapChain(device, swap_chain, window, overlay);
-      return;
+      return RenderResult::kSwapChainOutOfDate;
     }
 
-    PrepareCamera(scene, window.Size());
+    auto const extent = swap_chain.Extent();
+    PrepareCamera(scene, {int(extent.width), int(extent.height)});
     auto const simulation_signal =
         scene.lattice && scene.lattice->ready_signal > 0
             ? std::optional<std::uint64_t>(scene.lattice->ready_signal)
@@ -184,13 +178,25 @@ class Renderer::Impl {
     vk::PresentInfoKHR present{.swapchainCount = 1,
                                .pSwapchains = &*swap_chain.Handle(),
                                .pImageIndices = &image_index};
-    auto const result = device.PresentQueue().presentKHR(present);
+    vk::Result result;
+    try {
+      result = device.PresentQueue().presentKHR(present);
+    } catch (vk::OutOfDateKHRError const&) {
+      return RenderResult::kSwapChainOutOfDate;
+    }
     if (result == vk::Result::eSuboptimalKHR ||
         result == vk::Result::eErrorOutOfDateKHR) {
-      RecreateSwapChain(device, swap_chain, window, overlay);
-    } else {
-      assert(result == vk::Result::eSuccess);
+      return RenderResult::kSwapChainOutOfDate;
     }
+    assert(result == vk::Result::eSuccess);
+    return RenderResult::kSuccess;
+  }
+
+  void OnSwapChainRecreated(graphics::Device const& device,
+                            graphics::SwapChain const& swap_chain) {
+    CreateDepth(device, swap_chain.Extent());
+    auto const extent = swap_chain.Extent();
+    camera_.OnWindowResizedEvent({int(extent.width), int(extent.height)});
   }
 
   void Shutdown() {
@@ -216,16 +222,6 @@ class Renderer::Impl {
       throw std::runtime_error("No supported depth format");
     depth_ = graphics::ImageAllocator::CreateDepthImage(device, extent,
                                                         depth_format_);
-  }
-
-  void RecreateSwapChain(graphics::Device const& device,
-                         graphics::SwapChain& swap_chain,
-                         platform::Window const& window,
-                         IOverlayPass& overlay) {
-    swap_chain.RecreateSwapChain(device, window);
-    CreateDepth(device, swap_chain.Extent());
-    overlay.OnFrameResourcesChanged(swap_chain.ImageCount());
-    resize_pending_ = false;
   }
 
   void TransitionImage(graphics::SwapChain const& swap_chain,
@@ -263,7 +259,6 @@ class Renderer::Impl {
   vk::raii::CommandBuffer command_buffer_ = nullptr;
   LatticeRenderer lattice_renderer_;
   Camera camera_;
-  bool resize_pending_ = false;
 };
 
 Renderer::Renderer(platform::WindowSize initial_window_size)
@@ -276,19 +271,22 @@ void Renderer::Init(graphics::Device const& device,
   impl_->Init(device, swap_chain, command_pools);
 }
 
-void Renderer::RenderFrame(graphics::Device const& device,
-                           graphics::SwapChain& swap_chain,
-                           graphics::FrameSync& frame_sync,
-                           application::SceneState const& scene,
-                           platform::Window const& window,
-                           IOverlayPass& overlay) {
-  impl_->RenderFrame(device, swap_chain, frame_sync, scene, window, overlay);
+RenderResult Renderer::RenderFrame(graphics::Device const& device,
+                                   graphics::SwapChain& swap_chain,
+                                   graphics::FrameSync& frame_sync,
+                                   application::SceneState const& scene,
+                                   IOverlayPass const& overlay) {
+  return impl_->RenderFrame(device, swap_chain, frame_sync, scene, overlay);
+}
+
+void Renderer::OnSwapChainRecreated(graphics::Device const& device,
+                                    graphics::SwapChain const& swap_chain) {
+  impl_->OnSwapChainRecreated(device, swap_chain);
 }
 
 void Renderer::HandleInput(events::InputEvent const& event) {
   impl_->HandleInput(event);
 }
-void Renderer::RequestResize() { impl_->RequestResize(); }
 void Renderer::Shutdown() { impl_->Shutdown(); }
 
 }  // namespace renderer

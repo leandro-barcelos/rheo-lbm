@@ -45,7 +45,7 @@ class UserInterface final : public renderer::IOverlayPass {
   void Shutdown();
 
   void Render(graphics::CommandList command_list) const override;
-  void OnFrameResourcesChanged(std::uint32_t image_count) override;
+  void OnFrameResourcesChanged(std::uint32_t image_count);
 
  private:
   ImGuiLayer layer_;

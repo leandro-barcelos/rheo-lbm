@@ -11,6 +11,7 @@
 #include "rheo/graphics/swap_chain.h"
 #include "rheo/platform/window.h"
 #include "rheo/renderer/overlay_pass.h"
+#include "rheo/renderer/render_result.h"
 
 namespace renderer {
 
@@ -27,16 +28,17 @@ class Renderer {
   void Init(graphics::Device const& device,
             graphics::SwapChain const& swap_chain,
             graphics::CommandPools const& command_pools);
-  void RenderFrame(graphics::Device const& device,
-                   graphics::SwapChain& swap_chain,
-                   graphics::FrameSync& frame_sync,
-                   application::SceneState const& scene,
-                   platform::Window const& window, IOverlayPass& overlay);
+  [[nodiscard]] RenderResult RenderFrame(graphics::Device const& device,
+                                         graphics::SwapChain& swap_chain,
+                                         graphics::FrameSync& frame_sync,
+                                         application::SceneState const& scene,
+                                         IOverlayPass const& overlay);
+  void OnSwapChainRecreated(graphics::Device const& device,
+                            graphics::SwapChain const& swap_chain);
   void PrepareCamera(application::SceneState const& scene,
                      platform::WindowSize size);
   domain::Ray ScreenPointToRay(double x, double y) const;
   void HandleInput(events::InputEvent const& event);
-  void RequestResize();
   void Shutdown();
 
  private:

@@ -28,16 +28,18 @@ void ApplicationBackend::WaitIdle() { device_.LogicalDevice().waitIdle(); }
 
 bool ApplicationBackend::ShouldClose() const { return window_.ShouldClose(); }
 
-bool ApplicationBackend::RecreteSwapChain() {
+bool ApplicationBackend::NeedsSwapChainRecreation() const {
   auto size = window_.Size();
+  return size.width != int(swap_chain_.Extent().width) ||
+         size.height != int(swap_chain_.Extent().height);
+}
 
-  if (size.width != int(swap_chain_.Extent().width) ||
-      size.height != int(swap_chain_.Extent().height)) {
-    swap_chain_.RecreateSwapChain(device_, window_);
-    return true;
+bool ApplicationBackend::RecreateSwapChain() {
+  if (IsMinimized()) {
+    return false;
   }
-
-  return false;
+  swap_chain_.RecreateSwapChain(device_, window_);
+  return true;
 }
 
 }  // namespace runtime

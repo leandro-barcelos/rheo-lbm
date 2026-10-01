@@ -19,7 +19,6 @@ class EditorInputRouter {
   struct Callbacks {
     std::function<domain::Ray(double, double)> ray;
     std::function<void(events::InputEvent const&)> camera;
-    std::function<void()> resize;
   };
   void Route(std::span<events::InputEvent const> events, Capture capture,
              Extent logical, Extent pixels, ICommandSink& commands,

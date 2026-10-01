@@ -72,6 +72,7 @@ void RheoLBMApp::Run() {
       std::get_if<application::ApplicationController>(&application_);
   auto* shallow_water =
       std::get_if<application::ShallowWaterController>(&application_);
+  bool swap_chain_out_of_date = false;
 
   while (!backend_.ShouldClose() &&
          ((free_surface == nullptr) || !free_surface->ShouldQuit())) {
@@ -87,11 +88,20 @@ void RheoLBMApp::Run() {
 
     UpdateDeltaTime();
 
+    if (swap_chain_out_of_date || backend_.NeedsSwapChainRecreation()) {
+      swap_chain_out_of_date = true;
+      if (!backend_.RecreateSwapChain()) {
+        continue;
+      }
+      if (auto* renderer = std::get_if<renderer::Renderer>(&renderer_)) {
+        renderer->OnSwapChainRecreated(backend_.Device(), backend_.SwapChain());
+      }
+      ui_.OnFrameResourcesChanged(backend_.SwapChain().ImageCount());
+      swap_chain_out_of_date = false;
+    }
+
     if (shallow_water != nullptr) {
       (void)backend_.InputQueue().Drain();
-      if (backend_.RecreteSwapChain()) {
-        ui_.OnFrameResourcesChanged(backend_.SwapChain().ImageCount());
-      }
       shallow_water->Update();
       backend_.WaitIdle();
     }
@@ -105,6 +115,7 @@ void RheoLBMApp::Run() {
     }
     ui_.EndFrame();
 
+    renderer::RenderResult result;
     if (free_surface != nullptr) {
       auto& renderer = std::get<renderer::Renderer>(renderer_);
       free_surface->ProcessPendingCommands();
@@ -116,14 +127,15 @@ void RheoLBMApp::Run() {
         break;
       }
       free_surface->Update(delta_time_);
-      renderer.RenderFrame(backend_.Device(), backend_.SwapChain(),
-                           backend_.FrameSync(), free_surface->SceneState(),
-                           backend_.Window(), ui_);
+      result = renderer.RenderFrame(backend_.Device(), backend_.SwapChain(),
+                                    backend_.FrameSync(),
+                                    free_surface->SceneState(), ui_);
     } else {
-      std::get<renderer::ShallowWaterRenderer>(renderer_).RenderFrame(
-          backend_.Device(), backend_.SwapChain(), backend_.FrameSync(),
-          backend_.Window(), ui_);
+      result = std::get<renderer::ShallowWaterRenderer>(renderer_).RenderFrame(
+          backend_.Device(), backend_.SwapChain(), backend_.FrameSync(), ui_);
     }
+    swap_chain_out_of_date =
+        result == renderer::RenderResult::kSwapChainOutOfDate;
   }
 }
 
@@ -150,8 +162,7 @@ void RheoLBMApp::RouteInput(application::ApplicationController& application,
        .camera =
            [&renderer](events::InputEvent const& event) {
              renderer.HandleInput(event);
-           },
-       .resize = [&renderer] { renderer.RequestResize(); }});
+           }});
 }
 
 }  // namespace rheo

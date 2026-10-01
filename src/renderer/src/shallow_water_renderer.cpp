@@ -111,14 +111,12 @@ class ShallowWaterRenderer::Impl {
     }
     draw->PopClipRect();
   }
-  void RenderFrame(const graphics::Device& device, graphics::SwapChain& swap,
-                   graphics::FrameSync& sync, const platform::Window& window,
-                   IOverlayPass& overlay) {
+  RenderResult RenderFrame(const graphics::Device& device,
+                           graphics::SwapChain& swap, graphics::FrameSync& sync,
+                           IOverlayPass const& overlay) {
     auto index = swap.AcquireNextImage(device, sync);
     if (index == graphics::SwapChain::kInvalidImageIndex) {
-      swap.RecreateSwapChain(device, window);
-      overlay.OnFrameResourcesChanged(swap.ImageCount());
-      return;
+      return RenderResult::kSwapChainOutOfDate;
     }
     cmd.reset();
     cmd.begin({});
@@ -170,15 +168,19 @@ class ShallowWaterRenderer::Impl {
         vk::SubmitInfo{.commandBufferCount = 1, .pCommandBuffers = &*cmd},
         nullptr);
     device.GraphicsQueue().waitIdle();
-    auto result =
-        device.PresentQueue().presentKHR({.swapchainCount = 1,
-                                          .pSwapchains = &*swap.Handle(),
-                                          .pImageIndices = &index});
+    vk::Result result;
+    try {
+      result = device.PresentQueue().presentKHR({.swapchainCount = 1,
+                                                 .pSwapchains = &*swap.Handle(),
+                                                 .pImageIndices = &index});
+    } catch (vk::OutOfDateKHRError const&) {
+      return RenderResult::kSwapChainOutOfDate;
+    }
     if (result == vk::Result::eSuboptimalKHR ||
         result == vk::Result::eErrorOutOfDateKHR) {
-      swap.RecreateSwapChain(device, window);
-      overlay.OnFrameResourcesChanged(swap.ImageCount());
+      return RenderResult::kSwapChainOutOfDate;
     }
+    return RenderResult::kSuccess;
   }
 };
 ShallowWaterRenderer::ShallowWaterRenderer()
@@ -202,11 +204,10 @@ void ShallowWaterRenderer::DrawMap(const domain::ShallowWaterSnapshot& s,
                                    ShallowWaterMapOptions options) {
   impl_->DrawMap(s, p, options);
 }
-void ShallowWaterRenderer::RenderFrame(const graphics::Device& d,
-                                       graphics::SwapChain& s,
-                                       graphics::FrameSync& f,
-                                       const platform::Window& w,
-                                       IOverlayPass& o) {
-  impl_->RenderFrame(d, s, f, w, o);
+RenderResult ShallowWaterRenderer::RenderFrame(const graphics::Device& d,
+                                               graphics::SwapChain& s,
+                                               graphics::FrameSync& f,
+                                               IOverlayPass const& o) {
+  return impl_->RenderFrame(d, s, f, o);
 }
 }  // namespace renderer

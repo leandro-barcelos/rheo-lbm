@@ -18,20 +18,24 @@ void graphics::SwapChain::Init(Device const& device, vk::SurfaceKHR surface,
 uint32_t graphics::SwapChain::AcquireNextImage(
     graphics::Device const& device,
     graphics::FrameSync const& frame_sync) const {
-  auto [result, image_index] =
-      swap_chain_.acquireNextImage(UINT64_MAX, nullptr, *frame_sync.Fence());
+  try {
+    auto [result, image_index] =
+        swap_chain_.acquireNextImage(UINT64_MAX, nullptr, *frame_sync.Fence());
 
-  if (result == vk::Result::eErrorOutOfDateKHR) {
+    if (result == vk::Result::eErrorOutOfDateKHR) {
+      return kInvalidImageIndex;
+    }
+    if ((result != vk::Result::eSuccess) &&
+        (result != vk::Result::eSuboptimalKHR)) {
+      throw std::runtime_error(
+          "[ERROR] Vulkan: failed to acquire swap chain image!");
+    }
+
+    frame_sync.WaitForFence(device);
+    return image_index;
+  } catch (vk::OutOfDateKHRError const&) {
     return kInvalidImageIndex;
   }
-  if ((result != vk::Result::eSuccess) &&
-      (result != vk::Result::eSuboptimalKHR)) {
-    throw std::runtime_error(
-        "[ERROR] Vulkan: failed to acquire swap chain image!");
-  }
-
-  frame_sync.WaitForFence(device);
-  return image_index;
 }
 
 void graphics::SwapChain::CreateSwapChain(Device const& device,
@@ -167,12 +171,6 @@ void graphics::SwapChain::CleanupSwapChain() {
 
 void graphics::SwapChain::RecreateSwapChain(Device const& device,
                                             platform::Window const& window) {
-  platform::WindowSize window_size = window.Size();
-  while (window_size.width == 0 || window_size.height == 0) {
-    window_size = window.Size();
-    platform::Window::WaitEvents();
-  }
-
   device.LogicalDevice().waitIdle();
 
   CleanupSwapChain();

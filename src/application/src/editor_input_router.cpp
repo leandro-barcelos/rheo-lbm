@@ -34,7 +34,6 @@ void EditorInputRouter::Route(std::span<events::InputEvent const> events,
   };
   for (auto const& event : events) {
     if (auto e = std::get_if<events::WindowResizedEvent>(&event)) {
-      callbacks.resize();
       callbacks.camera(event);
 
       continue;
