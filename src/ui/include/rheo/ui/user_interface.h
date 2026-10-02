@@ -2,10 +2,8 @@
 #define RHEO_UI_USER_INTERFACE_H
 
 #include <cstdint>
+#include <memory>
 
-#include "imgui_layer.h"
-#include "panels/free_surface_panels.h"
-#include "panels/shallow_water_panels.h"
 #include "rheo/application/application_command.h"
 #include "rheo/application/application_state.h"
 #include "rheo/graphics/context.h"
@@ -31,6 +29,9 @@ struct InputCaptureState {
 
 class UserInterface final : public renderer::IOverlayPass {
  public:
+  UserInterface();
+  ~UserInterface() override;
+
   void Init(platform::Window const& window,
             graphics::GraphicsContext const& context,
             graphics::Device const& device,
@@ -48,9 +49,8 @@ class UserInterface final : public renderer::IOverlayPass {
   void OnFrameResourcesChanged(std::uint32_t image_count);
 
  private:
-  ImGuiLayer layer_;
-  FreeSurfacePanels free_surface_;
-  ShallowWaterPanels shallow_water_;
+  class Impl;
+  std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace ui

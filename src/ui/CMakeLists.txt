@@ -9,7 +9,7 @@ add_library(
     src/panels/shallow_water_panels.cpp
 )
 add_library(rheo::ui ALIAS rheo_ui)
-target_include_directories(rheo_ui PUBLIC include src)
+target_include_directories(rheo_ui PUBLIC include PRIVATE src)
 target_include_directories(rheo_ui PRIVATE ${PROJECT_SOURCE_DIR}/external)
 target_link_libraries(
     rheo_ui
