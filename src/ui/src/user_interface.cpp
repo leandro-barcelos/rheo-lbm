@@ -24,9 +24,8 @@ class UserInterface::Impl {
     free_surface_.Draw(state, commands);
   }
 
-  void Draw(application::ShallowWaterController& controller,
-            renderer::ShallowWaterRenderer& renderer) {
-    shallow_water_.Draw(controller, renderer);
+  void Draw(application::ShallowWaterController& controller) {
+    shallow_water_.Draw(controller);
   }
 
   void EndFrame() { layer_.EndFrame(); }
@@ -70,9 +69,8 @@ void UserInterface::Draw(application::ApplicationViewState const& state,
   impl_->Draw(state, commands);
 }
 
-void UserInterface::Draw(application::ShallowWaterController& controller,
-                         renderer::ShallowWaterRenderer& renderer) {
-  impl_->Draw(controller, renderer);
+void UserInterface::Draw(application::ShallowWaterController& controller) {
+  impl_->Draw(controller);
 }
 
 void UserInterface::EndFrame() { impl_->EndFrame(); }

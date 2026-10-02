@@ -1,6 +1,7 @@
 add_library(
     rheo_renderer STATIC
     src/shallow_water_renderer.cpp
+    src/free_surface_renderer.cpp
     src/camera.cpp
     src/lattice_renderer.cpp
     src/renderer.cpp

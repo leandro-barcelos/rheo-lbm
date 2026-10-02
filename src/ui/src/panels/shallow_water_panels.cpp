@@ -4,8 +4,7 @@
 
 namespace ui {
 
-void ShallowWaterPanels::Draw(application::ShallowWaterController& c,
-                              renderer::ShallowWaterRenderer& map) {
+void ShallowWaterPanels::Draw(application::ShallowWaterController& c) {
   auto size = ImGui::GetIO().DisplaySize;
   ImGui::SetNextWindowPos({0, 0});
   ImGui::SetNextWindowSize(size);
@@ -17,7 +16,7 @@ void ShallowWaterPanels::Draw(application::ShallowWaterController& c,
   if (ImGui::Combo("Scenario", &selected, domain::ShallowWaterScenarioNames,
                    4)) {
     c.Select(static_cast<domain::ShallowWaterScenario>(selected));
-    map.FitMap();
+    map_.FitMap();
     options_.vectors = selected >= 2;
   }
   ImGui::SameLine();
@@ -72,10 +71,10 @@ void ShallowWaterPanels::Draw(application::ShallowWaterController& c,
   ImGui::Checkbox("Velocity vectors", &options_.vectors);
   ImGui::SameLine();
   if (ImGui::Button("Fit map")) {
-    map.FitMap();
+    map_.FitMap();
   }
   ImGui::TextUnformatted("Wheel: zoom | right drag: pan (over map)");
-  map.DrawMap(s, p, options_);
+  map_.DrawMap(s, p, options_);
   ImGui::End();
 }
 

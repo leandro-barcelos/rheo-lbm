@@ -18,7 +18,6 @@ class ShallowWaterRenderer::Impl {
  public:
   float zoom_ = 1;
   ImVec2 pan_{};
-  vk::raii::CommandBuffer cmd = nullptr;
   void DrawMap(const domain::ShallowWaterSnapshot& s,
                const domain::ShallowWaterSettings& p,
                ShallowWaterMapOptions options) {
@@ -111,90 +110,10 @@ class ShallowWaterRenderer::Impl {
     }
     draw->PopClipRect();
   }
-  RenderResult RenderFrame(const graphics::Device& device,
-                           graphics::SwapChain& swap, graphics::FrameSync& sync,
-                           IOverlayPass const& overlay) {
-    auto index = swap.AcquireNextImage(device, sync);
-    if (index == graphics::SwapChain::kInvalidImageIndex) {
-      return RenderResult::kSwapChainOutOfDate;
-    }
-    cmd.reset();
-    cmd.begin({});
-    auto transition = [&](vk::ImageLayout old_layout,
-                          vk::ImageLayout new_layout, bool finish) {
-      vk::ImageMemoryBarrier2 barrier{
-          .srcStageMask =
-              finish ? vk::PipelineStageFlagBits2::eColorAttachmentOutput
-                     : vk::PipelineStageFlagBits2::eTopOfPipe,
-          .srcAccessMask = finish ? vk::AccessFlagBits2::eColorAttachmentWrite
-                                  : vk::AccessFlags2{},
-          .dstStageMask =
-              finish ? vk::PipelineStageFlagBits2::eBottomOfPipe
-                     : vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-          .dstAccessMask = finish ? vk::AccessFlags2{}
-                                  : vk::AccessFlagBits2::eColorAttachmentWrite,
-          .oldLayout = old_layout,
-          .newLayout = new_layout,
-          .srcQueueFamilyIndex = vk::QueueFamilyIgnored,
-          .dstQueueFamilyIndex = vk::QueueFamilyIgnored,
-          .image = swap.GetImage(index),
-          .subresourceRange = {.aspectMask = vk::ImageAspectFlagBits::eColor,
-                               .levelCount = 1,
-                               .layerCount = 1}};
-      cmd.pipelineBarrier2(
-          {.imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &barrier});
-      swap.SetImageLayout(index, new_layout);
-    };
-    transition(swap.GetImageLayout(index),
-               vk::ImageLayout::eColorAttachmentOptimal, false);
-    vk::RenderingAttachmentInfo attachment{
-        .imageView = swap.GetImageView(index),
-        .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
-        .loadOp = vk::AttachmentLoadOp::eClear,
-        .storeOp = vk::AttachmentStoreOp::eStore,
-        .clearValue = vk::ClearColorValue(0.f, 0.f, 0.f, 1.f)};
-    cmd.beginRendering(
-        {.renderArea = {.offset = {0, 0}, .extent = swap.Extent()},
-         .layerCount = 1,
-         .colorAttachmentCount = 1,
-         .pColorAttachments = &attachment});
-    overlay.Render(graphics::CommandList{
-        .native_handle = static_cast<VkCommandBuffer>(*cmd)});
-    cmd.endRendering();
-    transition(vk::ImageLayout::eColorAttachmentOptimal,
-               vk::ImageLayout::ePresentSrcKHR, true);
-    cmd.end();
-    device.GraphicsQueue().submit(
-        vk::SubmitInfo{.commandBufferCount = 1, .pCommandBuffers = &*cmd},
-        nullptr);
-    device.GraphicsQueue().waitIdle();
-    vk::Result result;
-    try {
-      result = device.PresentQueue().presentKHR({.swapchainCount = 1,
-                                                 .pSwapchains = &*swap.Handle(),
-                                                 .pImageIndices = &index});
-    } catch (vk::OutOfDateKHRError const&) {
-      return RenderResult::kSwapChainOutOfDate;
-    }
-    if (result == vk::Result::eSuboptimalKHR ||
-        result == vk::Result::eErrorOutOfDateKHR) {
-      return RenderResult::kSwapChainOutOfDate;
-    }
-    return RenderResult::kSuccess;
-  }
 };
 ShallowWaterRenderer::ShallowWaterRenderer()
     : impl_(std::make_unique<Impl>()) {}
 ShallowWaterRenderer::~ShallowWaterRenderer() = default;
-void ShallowWaterRenderer::Init(const graphics::Device& device,
-                                const graphics::CommandPools& pools) {
-  vk::CommandBufferAllocateInfo allocation{
-      .commandPool = *pools.Graphics(),
-      .level = vk::CommandBufferLevel::ePrimary,
-      .commandBufferCount = 1};
-  impl_->cmd = std::move(
-      device.LogicalDevice().allocateCommandBuffers(allocation).front());
-}
 void ShallowWaterRenderer::FitMap() {
   impl_->zoom_ = 1;
   impl_->pan_ = {};
@@ -203,11 +122,5 @@ void ShallowWaterRenderer::DrawMap(const domain::ShallowWaterSnapshot& s,
                                    const domain::ShallowWaterSettings& p,
                                    ShallowWaterMapOptions options) {
   impl_->DrawMap(s, p, options);
-}
-RenderResult ShallowWaterRenderer::RenderFrame(const graphics::Device& d,
-                                               graphics::SwapChain& s,
-                                               graphics::FrameSync& f,
-                                               IOverlayPass const& o) {
-  return impl_->RenderFrame(d, s, f, o);
 }
 }  // namespace renderer

@@ -8,10 +8,10 @@ namespace ui {
 
 class ShallowWaterPanels {
  public:
-  void Draw(application::ShallowWaterController& controller,
-            renderer::ShallowWaterRenderer& map);
+  void Draw(application::ShallowWaterController& controller);
 
  private:
+  renderer::ShallowWaterRenderer map_;
   renderer::ShallowWaterMapOptions options_;
 };
 

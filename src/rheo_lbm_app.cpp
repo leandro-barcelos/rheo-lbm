@@ -40,14 +40,11 @@ RheoLBMApp::RheoLBMApp(SimulationModel model)
                   .width = 1280, .height = 720, .title = "Rheo LBM"}}),
       model_(model),
       simulation_(InitializeSimulation(model, backend_)),
-      application_(InitializeApplication()),
-      renderer_(InitializeRenderer()) {
-  if (auto* renderer = std::get_if<renderer::Renderer>(&renderer_)) {
-    renderer->Init(backend_.Device(), backend_.SwapChain(),
-                   backend_.CommandPools());
-  } else {
-    std::get<renderer::ShallowWaterRenderer>(renderer_).Init(
-        backend_.Device(), backend_.CommandPools());
+      application_(InitializeApplication()) {
+  renderer_.Init(backend_.Device(), backend_.CommandPools());
+  if (model_ == SimulationModel::kFreeSurface3D) {
+    free_surface_renderer_.emplace(backend_.Window().Size());
+    free_surface_renderer_->Init(backend_.Device(), backend_.SwapChain());
   }
   ui_.Init(backend_.Window(), backend_.GraphicsContext(), backend_.Device(),
            backend_.SwapChain(), model_ == SimulationModel::kFreeSurface3D);
@@ -57,8 +54,9 @@ RheoLBMApp::RheoLBMApp(SimulationModel model)
 RheoLBMApp::~RheoLBMApp() {
   backend_.WaitIdle();
   ui_.Shutdown();
-  if (auto* renderer = std::get_if<renderer::Renderer>(&renderer_)) {
-    renderer->Shutdown();
+  renderer_.Shutdown();
+  if (free_surface_renderer_) {
+    free_surface_renderer_->Shutdown();
   }
 }
 
@@ -125,17 +123,6 @@ RheoLBMApp::Application RheoLBMApp::InitializeApplication() {
   throw std::invalid_argument("Invalid simulation model");
 }
 
-RheoLBMApp::Renderer RheoLBMApp::InitializeRenderer() {
-  switch (model_) {
-    case SimulationModel::kFreeSurface3D:
-      return Renderer{std::in_place_type<renderer::Renderer>,
-                      backend_.Window().Size()};
-    case SimulationModel::kShallowWater2D:
-      return Renderer{std::in_place_type<renderer::ShallowWaterRenderer>};
-  }
-  throw std::invalid_argument("Invalid simulation model");
-}
-
 bool RheoLBMApp::ShouldQuit() const {
   auto const* free_surface =
       std::get_if<application::ApplicationController>(&application_);
@@ -154,8 +141,9 @@ bool RheoLBMApp::RecreateSwapChainIfNeeded(bool swap_chain_out_of_date) {
     if (!backend_.RecreateSwapChain()) {
       return true;
     }
-    if (auto* renderer = std::get_if<renderer::Renderer>(&renderer_)) {
-      renderer->OnSwapChainRecreated(backend_.Device(), backend_.SwapChain());
+    if (free_surface_renderer_) {
+      free_surface_renderer_->OnSwapChainRecreated(backend_.Device(),
+                                                   backend_.SwapChain());
     }
     ui_.OnFrameResourcesChanged(backend_.SwapChain().ImageCount());
   }
@@ -169,15 +157,14 @@ void RheoLBMApp::DrawUi() {
           std::get_if<application::ApplicationController>(&application_)) {
     ui_.Draw(free_surface->ViewState(), *free_surface);
   } else {
-    ui_.Draw(std::get<application::ShallowWaterController>(application_),
-             std::get<renderer::ShallowWaterRenderer>(renderer_));
+    ui_.Draw(std::get<application::ShallowWaterController>(application_));
   }
   ui_.EndFrame();
 }
 
 void RheoLBMApp::ProcessFreeSurfaceInput(
     application::ApplicationController& application) {
-  auto& renderer = std::get<renderer::Renderer>(renderer_);
+  auto& renderer = free_surface_renderer_.value();
   application.ProcessPendingCommands();
   renderer.PrepareCamera(application.SceneState(), backend_.Window().Size());
   RouteInput(application, renderer, ui::UserInterface::InputCapture());
@@ -187,16 +174,16 @@ void RheoLBMApp::ProcessFreeSurfaceInput(
 renderer::RenderResult RheoLBMApp::RenderFrame() {
   if (auto const* free_surface =
           std::get_if<application::ApplicationController>(&application_)) {
-    return std::get<renderer::Renderer>(renderer_).RenderFrame(
-        backend_.Device(), backend_.SwapChain(), backend_.FrameSync(),
-        free_surface->SceneState(), ui_);
+    auto pass = free_surface_renderer_->MakePass(free_surface->SceneState());
+    return renderer_.RenderFrame(backend_.Device(), backend_.SwapChain(),
+                                 backend_.FrameSync(), ui_, &pass);
   }
-  return std::get<renderer::ShallowWaterRenderer>(renderer_).RenderFrame(
-      backend_.Device(), backend_.SwapChain(), backend_.FrameSync(), ui_);
+  return renderer_.RenderFrame(backend_.Device(), backend_.SwapChain(),
+                               backend_.FrameSync(), ui_);
 }
 
 void RheoLBMApp::RouteInput(application::ApplicationController& application,
-                            renderer::Renderer& renderer,
+                            renderer::FreeSurfaceRenderer& renderer,
                             ui::InputCaptureState capture) {
   auto logical = backend_.Window().LogicalSize();
   auto pixels = backend_.Window().Size();

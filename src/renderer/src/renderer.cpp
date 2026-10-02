@@ -1,28 +1,15 @@
 #include "rheo/renderer/renderer.h"
 
-#include <algorithm>
 #include <cassert>
 #include <cstdint>
-#include <limits>
-#include <optional>
 #include <utility>
-
-#include "camera.h"
-#include "lattice_renderer.h"
-#include "rheo/graphics/images.h"
 
 namespace renderer {
 
 class Renderer::Impl {
  public:
-  explicit Impl(platform::WindowSize initial_window_size)
-      : camera_(glm::vec3(0.5F, 2.0F, 0.5F), initial_window_size) {}
-
   void Init(graphics::Device const& device,
-            graphics::SwapChain const& swap_chain,
             graphics::CommandPools const& command_pools) {
-    CreateDepth(device, swap_chain.Extent());
-    lattice_renderer_.Init(device, swap_chain, depth_format_);
     vk::CommandBufferAllocateInfo allocation{
         .commandPool = *command_pools.Graphics(),
         .level = vk::CommandBufferLevel::ePrimary,
@@ -31,44 +18,14 @@ class Renderer::Impl {
         device.LogicalDevice().allocateCommandBuffers(allocation).front());
   }
 
-  void PrepareCamera(application::SceneState const& scene,
-                     platform::WindowSize size) {
-    camera_.OnWindowResizedEvent({size.width, size.height});
-    if (scene.lattice) {
-      auto const& l = *scene.lattice;
-      glm::vec3 shape{l.lattice_width, l.lattice_height, l.lattice_depth};
-      if (scene.dem == framed_dem_ && shape == framed_shape_) return;
-      framed_shape_ = shape;
-      glm::vec3 half = 0.5F * shape / std::max({shape.x, shape.y, shape.z});
-      camera_.InitTopView(-half, half);
-      framed_dem_ = scene.dem;
-    }
-  }
-  domain::Ray ScreenRay(double x, double y) const {
-    return camera_.ScreenRay(x, y);
-  }
-  void HandleInput(events::InputEvent const& event) {
-    camera_.HandleInput(event);
-  }
   RenderResult RenderFrame(graphics::Device const& device,
                            graphics::SwapChain& swap_chain,
                            graphics::FrameSync& frame_sync,
-                           application::SceneState const& scene,
-                           IOverlayPass const& overlay) {
-    std::uint32_t const image_index =
-        swap_chain.AcquireNextImage(device, frame_sync);
+                           IOverlayPass const& overlay, IScenePass* scene) {
+    auto const image_index = AcquireFrame(device, swap_chain, frame_sync);
     if (image_index == graphics::SwapChain::kInvalidImageIndex) {
       return RenderResult::kSwapChainOutOfDate;
     }
-
-    auto const extent = swap_chain.Extent();
-    PrepareCamera(scene, {int(extent.width), int(extent.height)});
-    auto const simulation_signal =
-        scene.lattice && scene.lattice->ready_signal > 0
-            ? std::optional<std::uint64_t>(scene.lattice->ready_signal)
-            : std::nullopt;
-    std::uint64_t const wait_value = simulation_signal.value_or(0);
-    std::uint64_t const signal_value = frame_sync.GetNextTimelineValue();
 
     command_buffer_.reset();
     command_buffer_.begin({});
@@ -81,67 +38,27 @@ class Renderer::Impl {
     swap_chain.SetImageLayout(image_index,
                               vk::ImageLayout::eColorAttachmentOptimal);
 
-    vk::ClearValue clear_color = vk::ClearColorValue(0.0F, 0.0F, 0.0F, 1.0F);
-    vk::RenderingAttachmentInfo attachment{
-        .imageView = swap_chain.GetImageView(image_index),
-        .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
-        .loadOp = vk::AttachmentLoadOp::eClear,
-        .storeOp = vk::AttachmentStoreOp::eStore,
-        .clearValue = clear_color};
-    vk::ImageMemoryBarrier2 depth_barrier{
-        .srcStageMask = vk::PipelineStageFlagBits2::eEarlyFragmentTests |
-                        vk::PipelineStageFlagBits2::eLateFragmentTests,
-        .srcAccessMask = depth_initialized_
-                             ? vk::AccessFlagBits2::eDepthStencilAttachmentWrite
-                             : vk::AccessFlags2{},
-        .dstStageMask = vk::PipelineStageFlagBits2::eEarlyFragmentTests |
-                        vk::PipelineStageFlagBits2::eLateFragmentTests,
-        .dstAccessMask = vk::AccessFlagBits2::eDepthStencilAttachmentRead |
-                         vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
-        .oldLayout = depth_initialized_
-                         ? vk::ImageLayout::eDepthStencilAttachmentOptimal
-                         : vk::ImageLayout::eUndefined,
-        .newLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
-        .srcQueueFamilyIndex = vk::QueueFamilyIgnored,
-        .dstQueueFamilyIndex = vk::QueueFamilyIgnored,
-        .image = *depth_.Image(),
-        .subresourceRange = {.aspectMask = vk::ImageAspectFlagBits::eDepth,
-                             .baseMipLevel = 0,
-                             .levelCount = 1,
-                             .baseArrayLayer = 0,
-                             .layerCount = 1}};
-    command_buffer_.pipelineBarrier2(
-        {.imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &depth_barrier});
-    depth_initialized_ = true;
-    vk::RenderingAttachmentInfo depth_attachment{
-        .imageView = *depth_.ImageView(),
-        .imageLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
-        .loadOp = vk::AttachmentLoadOp::eClear,
-        .storeOp = vk::AttachmentStoreOp::eDontCare,
-        .clearValue = vk::ClearDepthStencilValue(1.0F, 0)};
-    vk::RenderingInfo rendering{.renderArea = {.offset = {.x = 0, .y = 0},
-                                               .extent = swap_chain.Extent()},
-                                .layerCount = 1,
-                                .colorAttachmentCount = 1,
-                                .pColorAttachments = &attachment,
-                                .pDepthAttachment = &depth_attachment};
-    command_buffer_.beginRendering(rendering);
-    lattice_renderer_.Render(command_buffer_, swap_chain, scene.lattice,
-                             camera_, scene.preview);
-    command_buffer_.endRendering();
-    // Overlay uses its existing color-only pipeline in a separate rendering
-    // scope.
-    vk::MemoryBarrier2 overlay_barrier{
-        .srcStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-        .srcAccessMask = vk::AccessFlagBits2::eColorAttachmentWrite,
-        .dstStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-        .dstAccessMask = vk::AccessFlagBits2::eColorAttachmentRead |
-                         vk::AccessFlagBits2::eColorAttachmentWrite};
-    command_buffer_.pipelineBarrier2(
-        {.memoryBarrierCount = 1, .pMemoryBarriers = &overlay_barrier});
-    attachment.loadOp = vk::AttachmentLoadOp::eLoad;
-    rendering.pDepthAttachment = nullptr;
-    command_buffer_.beginRendering(rendering);
+    if (scene != nullptr) {
+      auto depth = scene->Prepare(command_buffer_, swap_chain);
+      BeginColorPass(swap_chain, image_index, vk::AttachmentLoadOp::eClear,
+                     depth ? &*depth : nullptr);
+      scene->Render(command_buffer_, swap_chain);
+      command_buffer_.endRendering();
+      // ImGui's pipeline is color-only. Load the scene's color in a separate
+      // rendering scope, with a barrier making the previous writes visible.
+      vk::MemoryBarrier2 overlay_barrier{
+          .srcStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+          .srcAccessMask = vk::AccessFlagBits2::eColorAttachmentWrite,
+          .dstStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+          .dstAccessMask = vk::AccessFlagBits2::eColorAttachmentRead |
+                           vk::AccessFlagBits2::eColorAttachmentWrite};
+      command_buffer_.pipelineBarrier2(
+          {.memoryBarrierCount = 1, .pMemoryBarriers = &overlay_barrier});
+    }
+
+    BeginColorPass(swap_chain, image_index,
+                   (scene != nullptr) ? vk::AttachmentLoadOp::eLoad
+                                      : vk::AttachmentLoadOp::eClear);
     overlay.Render(graphics::CommandList{
         .native_handle = static_cast<VkCommandBuffer>(*command_buffer_)});
     command_buffer_.endRendering();
@@ -155,30 +72,67 @@ class Renderer::Impl {
     swap_chain.SetImageLayout(image_index, vk::ImageLayout::ePresentSrcKHR);
     command_buffer_.end();
 
+    Submit(device, frame_sync, (scene != nullptr) ? scene->ReadySignal() : 0);
+    return Present(device, swap_chain, image_index);
+  }
+
+  void Shutdown() { command_buffer_ = nullptr; }
+
+ private:
+  static std::uint32_t AcquireFrame(graphics::Device const& device,
+                                    graphics::SwapChain& swap_chain,
+                                    graphics::FrameSync& frame_sync) {
+    return swap_chain.AcquireNextImage(device, frame_sync);
+  }
+
+  void BeginColorPass(graphics::SwapChain const& swap_chain,
+                      std::uint32_t image_index, vk::AttachmentLoadOp load_op,
+                      vk::RenderingAttachmentInfo const* depth = nullptr) {
+    vk::RenderingAttachmentInfo attachment{
+        .imageView = swap_chain.GetImageView(image_index),
+        .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
+        .loadOp = load_op,
+        .storeOp = vk::AttachmentStoreOp::eStore,
+        .clearValue = vk::ClearColorValue(0.0F, 0.0F, 0.0F, 1.0F)};
+    command_buffer_.beginRendering(
+        {.renderArea = {.offset = {.x = 0, .y = 0},
+                        .extent = swap_chain.Extent()},
+         .layerCount = 1,
+         .colorAttachmentCount = 1,
+         .pColorAttachments = &attachment,
+         .pDepthAttachment = depth});
+  }
+
+  void Submit(graphics::Device const& device, graphics::FrameSync& frame_sync,
+              std::uint64_t wait_value) {
+    std::uint64_t const signal_value = frame_sync.GetNextTimelineValue();
     vk::PipelineStageFlags wait_stage =
         vk::PipelineStageFlagBits::eVertexShader;
     vk::TimelineSemaphoreSubmitInfo timeline{
-        .waitSemaphoreValueCount = simulation_signal ? 1U : 0U,
-        .pWaitSemaphoreValues = simulation_signal ? &wait_value : nullptr,
+        .waitSemaphoreValueCount = wait_value > 0 ? 1U : 0U,
+        .pWaitSemaphoreValues = wait_value > 0 ? &wait_value : nullptr,
         .signalSemaphoreValueCount = 1,
         .pSignalSemaphoreValues = &signal_value};
     vk::SubmitInfo submit{
         .pNext = &timeline,
-        .waitSemaphoreCount = simulation_signal ? 1U : 0U,
-        .pWaitSemaphores =
-            simulation_signal ? &*frame_sync.Semaphore() : nullptr,
-        .pWaitDstStageMask = simulation_signal ? &wait_stage : nullptr,
+        .waitSemaphoreCount = wait_value > 0 ? 1U : 0U,
+        .pWaitSemaphores = wait_value > 0 ? &*frame_sync.Semaphore() : nullptr,
+        .pWaitDstStageMask = wait_value > 0 ? &wait_stage : nullptr,
         .commandBufferCount = 1,
         .pCommandBuffers = &*command_buffer_,
         .signalSemaphoreCount = 1,
         .pSignalSemaphores = &*frame_sync.Semaphore()};
     device.GraphicsQueue().submit(submit, nullptr);
     frame_sync.WaitSemaphore(device, signal_value);
+  }
 
+  static RenderResult Present(graphics::Device const& device,
+                       graphics::SwapChain const& swap_chain,
+                       std::uint32_t image_index) {
     vk::PresentInfoKHR present{.swapchainCount = 1,
                                .pSwapchains = &*swap_chain.Handle(),
                                .pImageIndices = &image_index};
-    vk::Result result;
+    vk::Result result = vk::Result::eSuccess;
     try {
       result = device.PresentQueue().presentKHR(present);
     } catch (vk::OutOfDateKHRError const&) {
@@ -190,38 +144,6 @@ class Renderer::Impl {
     }
     assert(result == vk::Result::eSuccess);
     return RenderResult::kSuccess;
-  }
-
-  void OnSwapChainRecreated(graphics::Device const& device,
-                            graphics::SwapChain const& swap_chain) {
-    CreateDepth(device, swap_chain.Extent());
-    auto const extent = swap_chain.Extent();
-    camera_.OnWindowResizedEvent({int(extent.width), int(extent.height)});
-  }
-
-  void Shutdown() {
-    lattice_renderer_.Shutdown();
-    command_buffer_ = nullptr;
-    depth_ = {};
-  }
-
- private:
-  void CreateDepth(graphics::Device const& device, vk::Extent2D extent) {
-    depth_ = {};
-    depth_initialized_ = false;
-    for (auto format : {vk::Format::eD32Sfloat, vk::Format::eD16Unorm}) {
-      if (device.PhysicalDevice()
-              .getFormatProperties(format)
-              .optimalTilingFeatures &
-          vk::FormatFeatureFlagBits::eDepthStencilAttachment) {
-        depth_format_ = format;
-        break;
-      }
-    }
-    if (depth_format_ == vk::Format::eUndefined)
-      throw std::runtime_error("No supported depth format");
-    depth_ = graphics::ImageAllocator::CreateDepthImage(device, extent,
-                                                        depth_format_);
   }
 
   void TransitionImage(graphics::SwapChain const& swap_chain,
@@ -251,50 +173,23 @@ class Renderer::Impl {
     command_buffer_.pipelineBarrier2(dependency);
   }
 
-  graphics::AllocatedImage depth_;
-  vk::Format depth_format_ = vk::Format::eUndefined;
-  bool depth_initialized_ = false;
-  domain::SharedDem framed_dem_;
-  glm::vec3 framed_shape_{};
   vk::raii::CommandBuffer command_buffer_ = nullptr;
-  LatticeRenderer lattice_renderer_;
-  Camera camera_;
 };
 
-Renderer::Renderer(platform::WindowSize initial_window_size)
-    : impl_(std::make_unique<Impl>(initial_window_size)) {}
+Renderer::Renderer() : impl_(std::make_unique<Impl>()) {}
 Renderer::~Renderer() = default;
 
 void Renderer::Init(graphics::Device const& device,
-                    graphics::SwapChain const& swap_chain,
                     graphics::CommandPools const& command_pools) {
-  impl_->Init(device, swap_chain, command_pools);
+  impl_->Init(device, command_pools);
 }
-
 RenderResult Renderer::RenderFrame(graphics::Device const& device,
                                    graphics::SwapChain& swap_chain,
                                    graphics::FrameSync& frame_sync,
-                                   application::SceneState const& scene,
-                                   IOverlayPass const& overlay) {
-  return impl_->RenderFrame(device, swap_chain, frame_sync, scene, overlay);
-}
-
-void Renderer::OnSwapChainRecreated(graphics::Device const& device,
-                                    graphics::SwapChain const& swap_chain) {
-  impl_->OnSwapChainRecreated(device, swap_chain);
-}
-
-void Renderer::HandleInput(events::InputEvent const& event) {
-  impl_->HandleInput(event);
+                                   IOverlayPass const& overlay,
+                                   IScenePass* scene) {
+  return impl_->RenderFrame(device, swap_chain, frame_sync, overlay, scene);
 }
 void Renderer::Shutdown() { impl_->Shutdown(); }
 
 }  // namespace renderer
-
-void renderer::Renderer::PrepareCamera(application::SceneState const& scene,
-                                       platform::WindowSize size) {
-  impl_->PrepareCamera(scene, size);
-}
-domain::Ray renderer::Renderer::ScreenPointToRay(double x, double y) const {
-  return impl_->ScreenRay(x, y);
-}

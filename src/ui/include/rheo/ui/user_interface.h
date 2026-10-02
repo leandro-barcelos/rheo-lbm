@@ -16,10 +16,6 @@ namespace application {
 class ShallowWaterController;
 }
 
-namespace renderer {
-class ShallowWaterRenderer;
-}
-
 namespace ui {
 
 struct InputCaptureState {
@@ -39,8 +35,7 @@ class UserInterface final : public renderer::IOverlayPass {
   void BeginFrame();
   void Draw(application::ApplicationViewState const& state,
             application::ICommandSink& commands);
-  void Draw(application::ShallowWaterController& controller,
-            renderer::ShallowWaterRenderer& renderer);
+  void Draw(application::ShallowWaterController& controller);
   void EndFrame();
   [[nodiscard]] static InputCaptureState InputCapture();
   void Shutdown();
