@@ -8,6 +8,7 @@
 #include "rheo/application/editor_input_router.h"
 #include "rheo/application/shallow_water_controller.h"
 #include "rheo/assets/asset_services.h"
+#include "rheo/renderer/render_result.h"
 #include "rheo/renderer/renderer.h"
 #include "rheo/renderer/shallow_water_renderer.h"
 #include "rheo/runtime/application_backend.h"
@@ -28,7 +29,19 @@ class RheoLBMApp {
   void Run();
 
  private:
+  using Application = std::variant<application::ApplicationController,
+                                   application::ShallowWaterController>;
+  using Renderer =
+      std::variant<renderer::Renderer, renderer::ShallowWaterRenderer>;
+
+  Application InitializeApplication();
+  Renderer InitializeRenderer();
+  [[nodiscard]] bool ShouldQuit() const;
   void UpdateDeltaTime();
+  bool RecreateSwapChainIfNeeded(bool swap_chain_out_of_date);
+  void DrawUi();
+  void ProcessFreeSurfaceInput(application::ApplicationController& application);
+  renderer::RenderResult RenderFrame();
   void RouteInput(application::ApplicationController& application,
                   renderer::Renderer& renderer, ui::InputCaptureState capture);
 
@@ -38,10 +51,8 @@ class RheoLBMApp {
   assets::ImageLoader image_loader_;
   assets::ProjectRepository project_repository_;
   std::optional<simulation::FreeSurfaceSession> simulation_;
-  std::variant<application::ApplicationController,
-               application::ShallowWaterController>
-      application_;
-  std::variant<renderer::Renderer, renderer::ShallowWaterRenderer> renderer_;
+  Application application_;
+  Renderer renderer_;
   ui::UserInterface ui_;
   application::EditorInputRouter editor_input_;
   double last_time_ = 0.0;

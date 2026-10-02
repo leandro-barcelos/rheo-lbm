@@ -2,12 +2,34 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <optional>
 #include <stdexcept>
+#include <utility>
 #include <variant>
+
+#include "rheo/renderer/render_result.h"
+#include "rheo/runtime/application_backend.h"
+#include "rheo/simulation/simulation_session.h"
+#include "simulation_model.h"
 
 #ifdef _OPENMP
 #include <omp.h>
 #endif
+
+namespace {
+
+std::optional<simulation::FreeSurfaceSession> InitializeSimulation(
+    rheo::SimulationModel model, runtime::ApplicationBackend& backend) {
+  return model == rheo::SimulationModel::kFreeSurface3D
+             ? std::optional<
+                   simulation::FreeSurfaceSession>{std::in_place,
+                                                   backend.Device(),
+                                                   backend.CommandPools(),
+                                                   backend.FrameSync()}
+             : std::nullopt;
+}
+
+}  // namespace
 
 namespace rheo {
 
@@ -17,36 +39,9 @@ RheoLBMApp::RheoLBMApp(SimulationModel model)
               platform::WindowProperties{
                   .width = 1280, .height = 720, .title = "Rheo LBM"}}),
       model_(model),
-      application_([model, this]() -> decltype(application_) {
-        switch (model) {
-          case SimulationModel::kFreeSurface3D:
-            simulation_.emplace(backend_.Device(), backend_.CommandPools(),
-                                backend_.FrameSync());
-            return decltype(application_){
-                std::in_place_type<application::ApplicationController>,
-                dem_loader_, image_loader_, project_repository_, *simulation_};
-          case SimulationModel::kShallowWater2D:
-#ifdef _OPENMP
-            if (std::getenv("OMP_NUM_THREADS") == nullptr) {  // NOLINT
-              omp_set_num_threads(std::min(4, omp_get_max_threads()));
-            }
-#endif
-            return decltype(application_){
-                std::in_place_type<application::ShallowWaterController>};
-        }
-        throw std::invalid_argument("Invalid simulation model");
-      }()),
-      renderer_([model, this]() -> decltype(renderer_) {
-        switch (model) {
-          case SimulationModel::kFreeSurface3D:
-            return decltype(renderer_){std::in_place_type<renderer::Renderer>,
-                                       backend_.Window().Size()};
-          case SimulationModel::kShallowWater2D:
-            return decltype(renderer_){
-                std::in_place_type<renderer::ShallowWaterRenderer>};
-        }
-        throw std::invalid_argument("Invalid simulation model");
-      }()) {
+      simulation_(InitializeSimulation(model, backend_)),
+      application_(InitializeApplication()),
+      renderer_(InitializeRenderer()) {
   if (auto* renderer = std::get_if<renderer::Renderer>(&renderer_)) {
     renderer->Init(backend_.Device(), backend_.SwapChain(),
                    backend_.CommandPools());
@@ -74,12 +69,12 @@ void RheoLBMApp::Run() {
       std::get_if<application::ShallowWaterController>(&application_);
   bool swap_chain_out_of_date = false;
 
-  while (!backend_.ShouldClose() &&
-         ((free_surface == nullptr) || !free_surface->ShouldQuit())) {
+  while (!ShouldQuit()) {
     runtime::ApplicationBackend::PollEvents();
-    if (backend_.ShouldClose()) {
+    if (ShouldQuit()) {
       break;
     }
+
     if (backend_.IsMinimized()) {
       runtime::ApplicationBackend::WaitEvents();
       last_time_ = platform::Window::TimeSeconds();
@@ -87,62 +82,117 @@ void RheoLBMApp::Run() {
     }
 
     UpdateDeltaTime();
+    swap_chain_out_of_date = RecreateSwapChainIfNeeded(swap_chain_out_of_date);
 
-    if (swap_chain_out_of_date || backend_.NeedsSwapChainRecreation()) {
-      swap_chain_out_of_date = true;
-      if (!backend_.RecreateSwapChain()) {
-        continue;
-      }
-      if (auto* renderer = std::get_if<renderer::Renderer>(&renderer_)) {
-        renderer->OnSwapChainRecreated(backend_.Device(), backend_.SwapChain());
-      }
-      ui_.OnFrameResourcesChanged(backend_.SwapChain().ImageCount());
-      swap_chain_out_of_date = false;
+    if (swap_chain_out_of_date) {
+      continue;
     }
 
     if (shallow_water != nullptr) {
       (void)backend_.InputQueue().Drain();
       shallow_water->Update();
-      backend_.WaitIdle();
     }
 
-    ui_.BeginFrame();
-    if (free_surface != nullptr) {
-      ui_.Draw(free_surface->ViewState(), *free_surface);
-    } else {
-      ui_.Draw(*shallow_water,
-               std::get<renderer::ShallowWaterRenderer>(renderer_));
-    }
-    ui_.EndFrame();
+    DrawUi();
 
-    renderer::RenderResult result;
     if (free_surface != nullptr) {
-      auto& renderer = std::get<renderer::Renderer>(renderer_);
-      free_surface->ProcessPendingCommands();
-      renderer.PrepareCamera(free_surface->SceneState(),
-                             backend_.Window().Size());
-      RouteInput(*free_surface, renderer, ui::UserInterface::InputCapture());
-      free_surface->ProcessPendingCommands();
-      if (free_surface->ShouldQuit()) {
+      ProcessFreeSurfaceInput(*free_surface);
+      if (ShouldQuit()) {
         break;
       }
       free_surface->Update(delta_time_);
-      result = renderer.RenderFrame(backend_.Device(), backend_.SwapChain(),
-                                    backend_.FrameSync(),
-                                    free_surface->SceneState(), ui_);
-    } else {
-      result = std::get<renderer::ShallowWaterRenderer>(renderer_).RenderFrame(
-          backend_.Device(), backend_.SwapChain(), backend_.FrameSync(), ui_);
     }
     swap_chain_out_of_date =
-        result == renderer::RenderResult::kSwapChainOutOfDate;
+        RenderFrame() == renderer::RenderResult::kSwapChainOutOfDate;
   }
+}
+
+RheoLBMApp::Application RheoLBMApp::InitializeApplication() {
+  switch (model_) {
+    case SimulationModel::kFreeSurface3D:
+      return Application{std::in_place_type<application::ApplicationController>,
+                         dem_loader_, image_loader_, project_repository_,
+                         *simulation_};
+    case SimulationModel::kShallowWater2D:
+#ifdef _OPENMP
+      if (std::getenv("OMP_NUM_THREADS") == nullptr) {  // NOLINT
+        omp_set_num_threads(std::min(4, omp_get_max_threads()));
+      }
+#endif
+      return Application{
+          std::in_place_type<application::ShallowWaterController>};
+  }
+  throw std::invalid_argument("Invalid simulation model");
+}
+
+RheoLBMApp::Renderer RheoLBMApp::InitializeRenderer() {
+  switch (model_) {
+    case SimulationModel::kFreeSurface3D:
+      return Renderer{std::in_place_type<renderer::Renderer>,
+                      backend_.Window().Size()};
+    case SimulationModel::kShallowWater2D:
+      return Renderer{std::in_place_type<renderer::ShallowWaterRenderer>};
+  }
+  throw std::invalid_argument("Invalid simulation model");
+}
+
+bool RheoLBMApp::ShouldQuit() const {
+  auto const* free_surface =
+      std::get_if<application::ApplicationController>(&application_);
+  return backend_.ShouldClose() ||
+         (free_surface != nullptr && free_surface->ShouldQuit());
 }
 
 void RheoLBMApp::UpdateDeltaTime() {
   double const current_time = platform::Window::TimeSeconds();
   delta_time_ = (current_time - last_time_) * 1000.0;
   last_time_ = current_time;
+}
+
+bool RheoLBMApp::RecreateSwapChainIfNeeded(bool swap_chain_out_of_date) {
+  if (swap_chain_out_of_date || backend_.NeedsSwapChainRecreation()) {
+    if (!backend_.RecreateSwapChain()) {
+      return true;
+    }
+    if (auto* renderer = std::get_if<renderer::Renderer>(&renderer_)) {
+      renderer->OnSwapChainRecreated(backend_.Device(), backend_.SwapChain());
+    }
+    ui_.OnFrameResourcesChanged(backend_.SwapChain().ImageCount());
+  }
+
+  return false;
+}
+
+void RheoLBMApp::DrawUi() {
+  ui_.BeginFrame();
+  if (auto* free_surface =
+          std::get_if<application::ApplicationController>(&application_)) {
+    ui_.Draw(free_surface->ViewState(), *free_surface);
+  } else {
+    ui_.Draw(std::get<application::ShallowWaterController>(application_),
+             std::get<renderer::ShallowWaterRenderer>(renderer_));
+  }
+  ui_.EndFrame();
+}
+
+void RheoLBMApp::ProcessFreeSurfaceInput(
+    application::ApplicationController& application) {
+  auto& renderer = std::get<renderer::Renderer>(renderer_);
+  application.ProcessPendingCommands();
+  renderer.PrepareCamera(application.SceneState(), backend_.Window().Size());
+  RouteInput(application, renderer, ui::UserInterface::InputCapture());
+  application.ProcessPendingCommands();
+}
+
+renderer::RenderResult RheoLBMApp::RenderFrame() {
+  if (auto const* free_surface =
+          std::get_if<application::ApplicationController>(&application_)) {
+    return std::get<renderer::Renderer>(renderer_).RenderFrame(
+        backend_.Device(), backend_.SwapChain(), backend_.FrameSync(),
+        free_surface->SceneState(), ui_);
+  }
+  return std::get<renderer::ShallowWaterRenderer>(renderer_).RenderFrame(
+      backend_.Device(), backend_.SwapChain(), backend_.FrameSync(), ui_);
 }
 
 void RheoLBMApp::RouteInput(application::ApplicationController& application,
