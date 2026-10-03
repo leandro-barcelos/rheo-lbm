@@ -16,8 +16,10 @@ void ShallowWaterController::Start() {
 void ShallowWaterController::Advance(int steps) {
   if (!running_) return;
   try {
-    for (int i = 0; i < steps && Snapshot().steps < Parameters().max_steps; ++i)
-      session_->solver.Step();
+    for (int i = 0; i < steps && Snapshot().steps < Parameters().max_steps;
+         ++i) {
+      session_->Step();
+    }
   } catch (const std::exception& e) {
     error_ = e.what();
     running_ = false;

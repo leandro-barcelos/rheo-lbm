@@ -22,11 +22,11 @@ class ShallowWaterController {
                   std::chrono::milliseconds(8));
   bool Running() const { return running_; }
   const std::string& Error() const { return error_; }
-  const ShallowWaterSnapshot& Snapshot() const {
-    return session_->solver.Snapshot();
+  [[nodiscard]] ShallowWaterSnapshot const & Snapshot() const {
+    return session_->Snapshot();
   }
   const ShallowWaterSettings& Parameters() const {
-    return session_->solver.Settings();
+    return session_->Settings();
   }
   ShallowWaterScenario Scenario() const { return scenario_; }
 
