@@ -25,7 +25,7 @@ application::ApplicationController::ApplicationController(
     assets::IDemLoader const& dem_loader,
     assets::IImageLoader const& image_loader,
     assets::IProjectRepository const& project_repository,
-    simulation::ISimulationSession& simulation)
+    simulation::FreeSurfaceSession& simulation)
     : dem_loader_(dem_loader),
       image_loader_(image_loader),
       project_repository_(project_repository),

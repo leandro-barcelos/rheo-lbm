@@ -1,6 +1,6 @@
 #ifndef RHEO_APPLICATION_LATTICE_BRUSH_CONTROLLER_H
 #define RHEO_APPLICATION_LATTICE_BRUSH_CONTROLLER_H
-#include "rheo/simulation/simulation_session.h"
+#include "rheo/simulation/free_surface_session.h"
 namespace application {
 struct BrushPointer {
   domain::Ray ray;
@@ -10,7 +10,7 @@ struct BrushPointer {
 enum class EditorAction { kUndo, kRedo, kFinishDam, kRemovePoint, kCancelDam };
 class LatticeBrushController {
  public:
-  explicit LatticeBrushController(simulation::ISimulationSession& session)
+  explicit LatticeBrushController(simulation::FreeSurfaceSession& session)
       : session_(session) {}
   void Reset(int subdivisions);
   void Finish();
@@ -20,7 +20,7 @@ class LatticeBrushController {
   domain::BrushPreview const& Preview() const { return preview_; }
 
  private:
-  simulation::ISimulationSession& session_;
+  simulation::FreeSurfaceSession& session_;
   domain::BrushPreview preview_;
   bool painting_ = false;
   glm::dvec2 last_cursor_{};

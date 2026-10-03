@@ -6,7 +6,7 @@
 #include "rheo/application/application_command.h"
 #include "rheo/application/application_state.h"
 #include "rheo/assets/asset_services.h"
-#include "rheo/simulation/simulation_session.h"
+#include "rheo/simulation/free_surface_session.h"
 
 namespace application {
 
@@ -15,7 +15,7 @@ class ApplicationController final : public ICommandSink {
   ApplicationController(assets::IDemLoader const& dem_loader,
                         assets::IImageLoader const& image_loader,
                         assets::IProjectRepository const& project_repository,
-                        simulation::ISimulationSession& simulation);
+                        simulation::FreeSurfaceSession& simulation);
 
   void Submit(ApplicationCommand command) override;
   void ProcessPendingCommands();
@@ -53,7 +53,7 @@ class ApplicationController final : public ICommandSink {
   assets::IDemLoader const& dem_loader_;
   assets::IImageLoader const& image_loader_;
   assets::IProjectRepository const& project_repository_;
-  simulation::ISimulationSession& simulation_;
+  simulation::FreeSurfaceSession& simulation_;
   LatticeBrushController brush_;
   std::optional<domain::SimulationSettingsDraft> pending_draft_;
   std::vector<ApplicationCommand> commands_;

@@ -5,7 +5,7 @@ add_library(
     src/lattice_initializer.cpp
     src/lattice_editor.cpp
     src/free_surface_solver.cpp
-    src/simulation_session.cpp
+    src/free_surface_session.cpp
 )
 add_library(rheo::simulation ALIAS rheo_simulation)
 target_include_directories(rheo_simulation PUBLIC include PRIVATE src)

@@ -12,7 +12,7 @@
 #include "rheo/renderer/render_result.h"
 #include "rheo/renderer/renderer.h"
 #include "rheo/runtime/application_backend.h"
-#include "rheo/simulation/simulation_session.h"
+#include "rheo/simulation/free_surface_session.h"
 #include "rheo/ui/user_interface.h"
 #include "simulation_model.h"
 
