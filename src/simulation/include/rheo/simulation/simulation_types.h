@@ -4,11 +4,26 @@
 #include <cstddef>
 #include <cstdint>
 #include <glm/glm.hpp>
+#include <optional>
 
 #include "rheo/domain/lattice_editing.h"
 #include "rheo/graphics/buffer_view.h"
 
 namespace simulation {
+
+enum class SimulationStatus : std::uint8_t {
+  kNotReady,
+  kReady,
+  kRunning,
+  kPaused,
+  kCompleted,
+  kError
+};
+
+struct SimulationClock {
+  std::uint64_t step_count = 0;
+  std::optional<double> physical_time_seconds = std::nullopt;
+} __attribute__((aligned(32)));
 
 using domain::CellType;
 

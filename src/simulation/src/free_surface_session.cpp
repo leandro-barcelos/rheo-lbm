@@ -385,6 +385,22 @@ std::expected<void, std::string> FreeSurfaceSession::RemoveDam() {
   return impl_->RemoveDam();
 }
 
+SimulationStatus FreeSurfaceSession::Status() const {
+  if (!IsReady()) {
+    return SimulationStatus::kNotReady;
+  }
+  if (IsRunning()) {
+    return SimulationStatus::kRunning;
+  }
+  return State() == SimulationState::kPaused ? SimulationStatus::kPaused
+                                            : SimulationStatus::kReady;
+}
+
+SimulationClock FreeSurfaceSession::Clock() const {
+  return {.step_count = PhysicalStepCount(),
+          .physical_time_seconds = std::nullopt};
+}
+
 bool FreeSurfaceSession::IsRunning() const {
   return impl_->state == SimulationState::kRunning;
 }

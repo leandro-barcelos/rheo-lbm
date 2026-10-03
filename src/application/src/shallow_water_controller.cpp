@@ -9,6 +9,18 @@ void ShallowWaterController::Select(ShallowWaterScenario scenario) {
   error_.clear();
 }
 void ShallowWaterController::Reset() { Select(scenario_); }
+simulation::SimulationStatus ShallowWaterController::Status() const {
+  if (!error_.empty()) return simulation::SimulationStatus::kError;
+  if (Snapshot().steps >= Parameters().max_steps)
+    return simulation::SimulationStatus::kCompleted;
+  return running_ ? simulation::SimulationStatus::kRunning
+                  : simulation::SimulationStatus::kPaused;
+}
+simulation::SimulationClock ShallowWaterController::Clock() const {
+  auto const& snapshot = Snapshot();
+  return {.step_count = snapshot.steps,
+          .physical_time_seconds = snapshot.time};
+}
 void ShallowWaterController::Start() {
   if (error_.empty() && Snapshot().steps < Parameters().max_steps)
     running_ = true;

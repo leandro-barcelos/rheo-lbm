@@ -61,6 +61,8 @@ class FreeSurfaceSession {
   std::expected<void, std::string> RemoveDam();
   void Clear();
   [[nodiscard]] std::optional<LatticeRenderSnapshot> Update(double delta_ms);
+  [[nodiscard]] SimulationStatus Status() const;
+  [[nodiscard]] SimulationClock Clock() const;
   [[nodiscard]] bool IsRunning() const;
   [[nodiscard]] SimulationState State() const;
   [[nodiscard]] std::uint64_t PhysicalStepCount() const;

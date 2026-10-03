@@ -6,6 +6,8 @@
 #include <string>
 
 #include "rheo/simulation/shallow_water_session.h"
+#include "rheo/simulation/simulation_types.h"
+
 namespace application {
 using domain::ShallowWaterScenario;
 using domain::ShallowWaterSettings;
@@ -20,6 +22,9 @@ class ShallowWaterController {
   void Advance(int steps);
   void Update(std::chrono::duration<double, std::milli> budget =
                   std::chrono::milliseconds(8));
+  // The initial/reset condition is paused, just like an explicit pause.
+  [[nodiscard]] simulation::SimulationStatus Status() const;
+  [[nodiscard]] simulation::SimulationClock Clock() const;
   bool Running() const { return running_; }
   const std::string& Error() const { return error_; }
   [[nodiscard]] ShallowWaterSnapshot const & Snapshot() const {
